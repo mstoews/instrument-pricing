@@ -11,6 +11,7 @@ import (
 	"pricing-platform/internal/repository"
 	"pricing-platform/internal/service"
 	"pricing-platform/internal/transport/rest"
+	pricing "pricing-platform/pricing/src"
 	"syscall"
 	"time"
 )
@@ -37,7 +38,7 @@ func main() {
 	if addr == "" {
 		addr = "127.0.0.1:8080"
 	}
-	server := &http.Server{Addr: addr, Handler: rest.Handler(service.New(repository.New(pool))), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: addr, Handler: rest.Handler(service.New(repository.New(pool)), service.NewPricer(pricing.Engine{})), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)

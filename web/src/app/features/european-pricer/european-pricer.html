@@ -1,0 +1,178 @@
+<section class="panel pricing-panel" aria-labelledby="pricing-title">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">SCENARIO ANALYSIS</p>
+      <h2 id="pricing-title" #pricingHeading tabindex="-1">European option pricer</h2>
+    </div>
+    <span class="model-label">BLACK–SCHOLES</span>
+  </div>
+  <p class="muted scenario-note" id="scenario-note">
+    @if (contract(); as option) {
+      Starting contract: {{ instrument()?.name }} · {{ option.right_type }} · strike
+      {{ option.strike }} {{ instrument()?.currency }} · expiration {{ option.expiration }}. Strike
+      and right are copied below. Enter market assumptions or explicitly use a quote and date. You
+      can edit all scenario inputs before calculating.
+    } @else {
+      Start with a sample scenario or enter your own assumptions. These inputs are independent of
+      the selected instrument and its quotes.
+    }
+  </p>
+  @if (contract(); as option) {
+    <div class="contract-tools">
+      <div>
+        <h3>Underlying spot</h3>
+        @if (quote(); as currentQuote) {
+          <p class="field-help">
+            {{ currentQuote.source_id }} · observed {{ currentQuote.observed_at | date: 'medium' }}.
+            Latest available quote; it may not match your valuation date.
+          </p>
+          <div class="pricing-actions">
+            <button
+              type="button"
+              class="secondary"
+              (click)="useQuote('bid')"
+              [disabled]="!usableSpot(currentQuote.bid)"
+            >
+              Use bid {{ currentQuote.bid }} {{ instrument()?.currency }}
+            </button>
+            <button
+              type="button"
+              class="secondary"
+              (click)="useQuote('ask')"
+              [disabled]="!usableSpot(currentQuote.ask)"
+            >
+              Use ask {{ currentQuote.ask }} {{ instrument()?.currency }}
+            </button>
+          </div>
+        } @else {
+          <p class="muted">Underlying quote unavailable. Enter spot manually below.</p>
+        }
+        @if (copiedSpot()) {
+          <p class="field-help" role="status">{{ copiedSpot() }}</p>
+        }
+      </div>
+      <div>
+        <h3>Time convention</h3>
+        <label for="valuation-date">Valuation date (UTC calendar date)</label>
+        <input
+          id="valuation-date"
+          type="date"
+          [formField]="valuationForm.date"
+          (input)="changeDate()"
+          aria-describedby="date-convention date-error"
+          [attr.aria-invalid]="!!valuation().date && yearFraction() === null"
+        />
+        <p class="field-help" id="date-convention">
+          ACT/365F: calendar days to {{ option.expiration }} divided by 365, rounded to 8 decimals.
+          Same-day expiry is zero. No exchange closing time or holiday adjustment.
+        </p>
+        <p class="error" id="date-error">
+          @if (valuation().date && yearFraction() === null) {
+            Enter a valid date on or before expiration, or set years manually below.
+          }
+        </p>
+        <button
+          type="button"
+          class="secondary"
+          (click)="useDate()"
+          [disabled]="yearFraction() === null"
+        >
+          Use ACT/365F{{ yearFraction() !== null ? ' · ' + yearFraction() + ' years' : '' }}
+        </button>
+        @if (appliedDate()) {
+          <p class="field-help" role="status">
+            Year fraction applied from {{ appliedDate() }} using ACT/365F.
+          </p>
+        }
+      </div>
+    </div>
+  }
+  <form
+    novalidate
+    aria-describedby="scenario-note pricing-conventions"
+    (submit)="$event.preventDefault(); calculate()"
+    (input)="editScenario($event)"
+    (change)="editScenario($event)"
+  >
+    <div class="pricing-fields">
+      <div class="pricing-field">
+        <label for="pricing-right">Option right</label>
+        <select id="pricing-right" [formField]="scenarioForm.right_type">
+          <option value="call">Call</option>
+          <option value="put">Put</option>
+        </select>
+        <p class="field-help">European exercise only.</p>
+      </div>
+      @for (field of fields; track field.key) {
+        <div class="pricing-field">
+          <label [for]="'pricing-' + field.key">{{ field.label }}</label>
+          <input
+            [id]="'pricing-' + field.key"
+            type="text"
+            [attr.inputmode]="field.constraint === 'signed' ? 'text' : 'decimal'"
+            autocomplete="off"
+            [formField]="scenarioForm[field.key]"
+            [attr.aria-describedby]="'help-' + field.key + ' error-' + field.key"
+            [attr.aria-invalid]="
+              scenarioForm[field.key]().touched() && scenarioForm[field.key]().invalid()
+            "
+          />
+          <p class="field-help" [id]="'help-' + field.key">{{ field.help }}</p>
+          <div [id]="'error-' + field.key">
+            @if (scenarioForm[field.key]().touched()) {
+              @for (error of scenarioForm[field.key]().errors(); track $index) {
+                <p class="error field-error">{{ error.message }}</p>
+              }
+            }
+          </div>
+        </div>
+      }
+    </div>
+    <p class="footnote" id="pricing-conventions">
+      Prices are per unit, in the currency units of your spot and strike inputs. Apply any contract
+      multiplier separately. Time is an explicit year fraction; no valuation date or curve is
+      inferred. Rates and volatility are your scenario assumptions.
+    </p>
+    <div class="pricing-actions">
+      <button type="submit" [disabled]="pricing.request().isLoading">
+        {{
+          pricing.request().isLoading
+            ? 'Calculating…'
+            : pricing.request().error
+              ? 'Retry calculation'
+              : 'Calculate price'
+        }}
+      </button>
+      <button type="button" class="secondary" (click)="reset()">
+        {{ contract() ? 'Reset contract inputs' : 'Reset sample' }}
+      </button>
+      @if (contract()) {
+        <button type="button" class="secondary" (click)="useSample.emit()">
+          Use sample scenario
+        </button>
+      }
+    </div>
+  </form>
+  <div
+    class="pricing-output"
+    aria-live="polite"
+    aria-atomic="true"
+    [attr.aria-busy]="pricing.request().isLoading"
+  >
+    @if (pricing.request().isLoading) {
+      <p role="status">Calculating scenario…</p>
+    } @else if (pricing.request().error; as error) {
+      <p class="error" role="alert">{{ error }}</p>
+    } @else if (pricing.result(); as result) {
+      <p class="eyebrow">THEORETICAL PRICE / PER UNIT</p>
+      <output class="model-price" aria-label="Theoretical price per unit">{{
+        result.price
+      }}</output>
+      <p class="footnote">
+        European Black–Scholes · Model estimate from your submitted assumptions.
+      </p>
+    } @else {
+      <p class="muted">Enter your assumptions and calculate a theoretical price.</p>
+    }
+  </div>
+</section>

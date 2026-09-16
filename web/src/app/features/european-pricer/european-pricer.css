@@ -1,0 +1,105 @@
+:host {
+  display: block;
+  margin-top: 22px;
+}
+.scenario-note {
+  margin: 0 0 24px;
+  max-width: 760px;
+}
+.model-label {
+  font:
+    10px 'IBM Plex Mono',
+    monospace;
+  color: #8f9caf;
+  white-space: nowrap;
+}
+.pricing-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+.pricing-field input,
+.pricing-field select {
+  font-family: 'IBM Plex Mono', monospace;
+}
+.field-help {
+  color: #8f9caf;
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 8px 0 0;
+}
+.field-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+input[aria-invalid='true'] {
+  border-color: #f3a5a5;
+}
+.pricing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 22px;
+}
+.pricing-output {
+  border-top: 1px solid #273343;
+  margin-top: 24px;
+  padding-top: 24px;
+  min-height: 100px;
+}
+.model-price {
+  display: block;
+  font:
+    28px 'IBM Plex Mono',
+    monospace;
+  color: #8de0c0;
+  overflow-wrap: anywhere;
+}
+.pricing-output .footnote {
+  margin-top: 10px;
+}
+@media (max-width: 1000px) {
+  .pricing-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .pricing-fields {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .panel-heading {
+    flex-wrap: wrap;
+  }
+  .model-label {
+    margin-bottom: 16px;
+  }
+  .model-price {
+    font-size: 22px;
+  }
+}
+
+.contract-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  padding: 20px;
+  margin-bottom: 24px;
+  background: #0c141f;
+  border: 1px solid #273343;
+  border-radius: 5px;
+}
+.contract-tools h3 {
+  font-size: 14px;
+  margin: 0 0 14px;
+  font-weight: 500;
+}
+.contract-tools .pricing-actions {
+  margin-top: 12px;
+}
+@media (max-width: 650px) {
+  .contract-tools {
+    grid-template-columns: 1fr;
+    padding: 14px;
+  }
+}

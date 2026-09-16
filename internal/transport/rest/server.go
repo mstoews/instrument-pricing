@@ -30,8 +30,24 @@ func reply(w http.ResponseWriter, v any, e error) {
 	}
 	_ = json.NewEncoder(w).Encode(v)
 }
-func Handler(s *service.Market) http.Handler {
+func Handler(s *service.Market, pricer *service.Pricer) http.Handler {
 	m := http.NewServeMux()
+	m.HandleFunc("POST /v1/pricing/european", func(w http.ResponseWriter, r *http.Request) {
+		var q domain.EuropeanPriceRequest
+		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16384))
+		d.DisallowUnknownFields()
+		if err := d.Decode(&q); err != nil {
+			reply(w, nil, domain.ErrInvalid)
+			return
+		}
+		var extra any
+		if err := d.Decode(&extra); err != io.EOF {
+			reply(w, nil, domain.ErrInvalid)
+			return
+		}
+		v, err := pricer.European(q)
+		reply(w, v, err)
+	})
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { reply(w, map[string]string{"status": "ok"}, nil) })
 	m.HandleFunc("GET /v1/instruments", func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.Search(r.Context(), r.URL.Query().Get("q"))

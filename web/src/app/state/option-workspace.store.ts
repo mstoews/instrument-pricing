@@ -8,10 +8,10 @@ import { OptionsService } from '../core/options';
 import { Instrument, Quote, OptionContract, RequestState, idle, pending, loaded, failed } from '../core/models';
 interface WorkspaceState {
  instrument: Instrument | null; quote: Quote | null; expirations: string[]; expiration: string;
- chain: OptionContract[]; quoteRequest: RequestState; expirationsRequest: RequestState; chainRequest: RequestState;
+ chain: OptionContract[]; selectedContract: OptionContract | null; quoteRequest: RequestState; expirationsRequest: RequestState; chainRequest: RequestState;
 }
 export const OptionWorkspaceStore = signalStore(
- withState<WorkspaceState>({ instrument: null, quote: null, expirations: [], expiration: '', chain: [], quoteRequest: idle(), expirationsRequest: idle(), chainRequest: idle() }),
+ withState<WorkspaceState>({ instrument: null, quote: null, expirations: [], expiration: '', chain: [], selectedContract: null, quoteRequest: idle(), expirationsRequest: idle(), chainRequest: idle() }),
  withComputed(store => ({
   rows: computed(() => {
    const rows = new Map<string, { strike: string; call?: OptionContract; put?: OptionContract }>();
@@ -23,8 +23,14 @@ export const OptionWorkspaceStore = signalStore(
   }),
  })),
  withMethods((store, api = inject(OptionsService)) => ({
+  selectContract(id: string) {
+   const contract = store.chain().find(option => option.instrument_id === id);
+   if (!contract || contract.exercise_style !== 'european') return;
+   patchState(store, { selectedContract: { ...contract } });
+  },
+  clearContract() { patchState(store, { selectedContract: null }); },
   loadChain: rxMethod<string>(pipe(switchMap(expiration => {
-   patchState(store, { expiration, chain: [], chainRequest: idle() });
+   patchState(store, { expiration, chain: [], selectedContract: null, chainRequest: idle() });
    const id = store.instrument()?.id;
    if (!id || !expiration) return EMPTY;
    patchState(store, { chainRequest: pending() });

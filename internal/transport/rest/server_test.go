@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"pricing-platform/internal/domain"
 	"pricing-platform/internal/service"
+	pricing "pricing-platform/pricing/src"
 	"strings"
 	"testing"
 )
@@ -15,7 +16,7 @@ func (f fakeStore) Quote(context.Context, string) (domain.Quote, error) {
 	return domain.Quote{}, domain.ErrNotFound
 }
 func TestHTTPFailures(t *testing.T) {
-	h := Handler(service.New(fakeStore{}))
+	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}))
 	for _, tc := range []struct {
 		method, path, body string
 		status             int

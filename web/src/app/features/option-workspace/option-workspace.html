@@ -1,6 +1,6 @@
 <header class="topbar"><a class="brand" href="/">P<span> / </span>Pricing platform</a><span class="version">WORKSTATION · V0.1</span><span class="badge">SYNTHETIC DATA</span></header>
 <main>
- <div class="intro"><div><p class="eyebrow">MARKETS / EQUITY DERIVATIVES</p><h1>Option workspace</h1><p class="muted">Explore instruments, inspect quotes, and compare contracts.</p></div><div class="session">SAMPLE SESSION<span>Quotes &amp; derivatives</span></div></div>
+ <div class="intro"><div><p class="eyebrow">MARKETS / EQUITY DERIVATIVES</p><h1>Option workspace</h1><p class="muted">Explore instruments, inspect quotes, and price European scenarios.</p></div><div class="session">SAMPLE SESSION<span>Quotes &amp; derivatives</span></div></div>
  <div class="layout">
  <aside class="panel"><h2>Security search</h2>
   <form (submit)="$event.preventDefault(); instruments.search(search.value)"><label for="search">Name or identifier</label><div class="search"><input id="search" #search value="AAPL" placeholder="e.g. AAPL" maxlength="100"><button type="submit">Search</button></div></form>
@@ -27,13 +27,14 @@
   @if (workspace.expirationsRequest().error || workspace.chainRequest().error; as error) { <p class="error" role="alert">{{ error }}</p><button class="secondary" (click)="refresh()">Retry</button> }
   @if (workspace.expirationsRequest().isLoaded && !workspace.expirations().length) { <p class="empty">No option expirations for this instrument.</p> }
   @if (workspace.chainRequest().isLoaded) {
-  <div class="table-scroll"><table><caption class="sr-only">Call and put quotes by strike, expiration {{ workspace.expiration() }}</caption><thead><tr><th colspan="2" class="calls">CALLS</th><th>STRIKE</th><th colspan="2" class="puts">PUTS</th></tr><tr><th scope="col">Bid</th><th scope="col">Ask</th><th scope="col">{{ instrument.currency }}</th><th scope="col">Bid</th><th scope="col">Ask</th></tr></thead><tbody>
-  @for (row of workspace.rows(); track row.strike) { <tr><td>{{ row.call?.bid || '—' }}</td><td>{{ row.call?.ask || '—' }}</td><th scope="row">{{ row.strike }}</th><td>{{ row.put?.bid || '—' }}</td><td>{{ row.put?.ask || '—' }}</td></tr> } @empty { <tr><td colspan="5">No contracts for this expiration.</td></tr> }
-  </tbody></table></div><p class="footnote">{{ workspace.chain().length }} contracts · Latest available quotes · Synthetic European contracts</p>
+  <div class="table-scroll"><table><caption class="sr-only">Call and put quotes by strike, expiration {{ workspace.expiration() }}</caption><thead><tr><th colspan="3" class="calls">CALLS</th><th>STRIKE</th><th colspan="3" class="puts">PUTS</th></tr><tr><th scope="col">Bid</th><th scope="col">Ask</th><th scope="col">Scenario</th><th scope="col">{{ instrument.currency }}</th><th scope="col">Bid</th><th scope="col">Ask</th><th scope="col">Scenario</th></tr></thead><tbody>
+  @for (row of workspace.rows(); track row.strike) { <tr><td>{{ row.call?.bid || '—' }}</td><td>{{ row.call?.ask || '—' }}</td><td>@if (row.call; as call) { <button type="button" class="secondary" [disabled]="call.exercise_style !== 'european'" [attr.aria-label]="'Use call contract at strike ' + row.strike" [attr.aria-pressed]="workspace.selectedContract()?.instrument_id === call.instrument_id" (click)="useContract(call.instrument_id)">Use call</button> }</td><th scope="row">{{ row.strike }}</th><td>{{ row.put?.bid || '—' }}</td><td>{{ row.put?.ask || '—' }}</td><td>@if (row.put; as put) { <button type="button" class="secondary" [disabled]="put.exercise_style !== 'european'" [attr.aria-label]="'Use put contract at strike ' + row.strike" [attr.aria-pressed]="workspace.selectedContract()?.instrument_id === put.instrument_id" (click)="useContract(put.instrument_id)">Use put</button> }</td></tr> } @empty { <tr><td colspan="7">No contracts for this expiration.</td></tr> }
+  </tbody></table></div><p class="footnote">{{ workspace.chain().length }} contracts · Latest available quotes · Use a European contract to start a scenario below; other exercise styles are disabled.</p>
   }
   </div>
  } @else { <div class="panel empty-state"><span class="empty-icon">⌕</span><p class="eyebrow">YOUR MARKET WORKSPACE</p><h2>Select an instrument to begin</h2><p class="muted">Search AAPL and select a result to load its quote and option chain.</p></div> }
  </section>
  </div>
+ <app-european-pricer [contract]="workspace.selectedContract()" [instrument]="workspace.instrument()" [quote]="workspace.quote()" (useSample)="workspace.clearContract()" />
  <footer>PRICING PLATFORM <span>Research prototype · No live feed connected</span></footer>
 </main>

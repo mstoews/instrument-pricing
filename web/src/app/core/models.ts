@@ -8,3 +8,15 @@ export const loaded = (): RequestState => ({ isLoading: false, isLoaded: true, e
 export function failed(error: unknown): RequestState {
  return { ...idle(), error: error instanceof Error ? error.message : 'Request failed. Please retry.' };
 }
+
+export interface EuropeanPriceRequest {
+ exercise_style: 'european';
+ right_type: 'call' | 'put';
+ strike: string;
+ time_to_expiry: string;
+ spot: string;
+ volatility: string;
+ risk_free_rate: string;
+ dividend_yield: string;
+}
+export interface EuropeanPriceResult { model: 'black_scholes'; price: string }
