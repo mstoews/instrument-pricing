@@ -1,0 +1,124 @@
+<details class="curves-panel">
+  <summary>Yield curves · choose a scenario rate</summary>
+  <p class="muted" id="curve-convention">
+    Continuously compounded zero rates, shown as decimal fractions (0.04 = 4%). A chosen point is
+    copied as a flat scenario rate; no interpolation or tenor matching is applied. Check currency,
+    tenor and observation date against your scenario.
+  </p>
+  <form novalidate (submit)="$event.preventDefault(); load()" (input)="store.clear()">
+    <label for="curve-currency">{{ currency() ? 'Contract currency' : 'Scenario currency' }}</label>
+    <div class="currency-controls">
+      <input
+        id="curve-currency"
+        [formField]="currencyForm.currency"
+        autocomplete="off"
+        aria-describedby="currency-error"
+        [attr.aria-invalid]="currencyForm.currency().touched() && currencyForm.currency().invalid()"
+      />
+      <button type="submit">
+        {{ store.curvesRequest().isLoading ? 'Reload curves' : 'Load curves' }}
+      </button>
+    </div>
+    <div id="currency-error">
+      @if (currencyForm.currency().touched()) {
+        @for (error of currencyForm.currency().errors(); track $index) {
+          <p class="error">{{ error.message }}</p>
+        }
+      }
+    </div>
+  </form>
+  @if (store.curvesRequest().isLoading) {
+    <p role="status">Loading curves…</p>
+  }
+  @if (store.curvesRequest().error; as error) {
+    <p class="error" role="alert">{{ error }}</p>
+  }
+  @if (store.curvesRequest().isLoaded && !store.curves().length) {
+    <p class="muted">
+      No curves available for {{ store.currency() }}. You can enter a rate manually.
+    </p>
+  }
+  @if (store.curves().length) {
+    <h3>Available curves</h3>
+    <div class="curve-list">
+      @for (curve of store.curves(); track curve.id) {
+        <button
+          type="button"
+          class="secondary"
+          [attr.aria-pressed]="store.selectedId() === curve.id"
+          (click)="store.selectCurve(curve.id)"
+        >
+          {{ curve.name }} · {{ curve.currency }}
+        </button>
+      }
+    </div>
+  }
+  @if (store.selectedCurve(); as curve) {
+    <div class="curve-heading">
+      <h3>{{ curve.name }}</h3>
+      <button type="button" class="secondary" (click)="store.selectCurve(curve.id)">
+        Refresh points
+      </button>
+    </div>
+    @if (store.pointsRequest().isLoading) {
+      <p role="status">Loading curve points…</p>
+    }
+    @if (store.pointsRequest().error; as error) {
+      <p class="error" role="alert">{{ error }}</p>
+      <button type="button" class="secondary" (click)="store.selectCurve(curve.id)">
+        Retry points
+      </button>
+    }
+    @if (store.pointsRequest().isLoaded) {
+      <div class="table-scroll">
+        <table aria-describedby="curve-convention">
+          <caption>
+            {{
+              curve.currency
+            }}
+            zero rates · latest available snapshot
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Tenor (days)</th>
+              <th scope="col">Zero rate</th>
+              <th scope="col">Source</th>
+              <th scope="col">Observed</th>
+              <th scope="col">Scenario</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (point of store.points(); track point.tenor_days) {
+              <tr>
+                <th scope="row">{{ point.tenor_days }}</th>
+                <td>{{ point.zero_rate }}</td>
+                <td>{{ point.source_id }}</td>
+                <td>{{ point.observed_at | date: 'medium' : 'UTC' }} UTC</td>
+                <td>
+                  <button
+                    type="button"
+                    class="secondary"
+                    (click)="apply(point)"
+                    [disabled]="!isPricingRate(point.zero_rate)"
+                    [attr.aria-label]="'Use ' + point.tenor_days + '-day rate ' + point.zero_rate"
+                  >
+                    Use rate
+                  </button>
+                  @if (!isPricingRate(point.zero_rate)) {
+                    <span class="error"
+                      >Outside pricing precision; enter a rounded assumption manually.</span
+                    >
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="5">No points in this curve snapshot. Enter a rate manually.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</details>

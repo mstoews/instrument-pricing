@@ -133,6 +133,9 @@
       multiplier separately. Time is an explicit year fraction; no valuation date or curve is
       inferred. Rates and volatility are your scenario assumptions.
     </p>
+    @if (copiedRate()) {
+      <p class="footnote" role="status">{{ copiedRate() }}</p>
+    }
     <div class="pricing-actions">
       <button type="submit" [disabled]="pricing.request().isLoading">
         {{
@@ -153,6 +156,10 @@
       }
     </div>
   </form>
+  <app-curve-workspace
+    [currency]="contract() ? (instrument()?.currency ?? '') : ''"
+    (rateSelected)="useCurveRate($event)"
+  />
   <div
     class="pricing-output"
     aria-live="polite"

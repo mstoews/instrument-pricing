@@ -14,7 +14,15 @@ import {
 import { form, FormField, submit, validate } from '@angular/forms/signals';
 import { DatePipe } from '@angular/common';
 import { actual365Fixed, usableSpot } from './scenario-conventions';
-import { EuropeanPriceRequest, Instrument, OptionContract, Quote } from '../../core/models';
+import {
+  EuropeanPriceRequest,
+  Instrument,
+  OptionContract,
+  Quote,
+  CurveRateSelection,
+} from '../../core/models';
+import { CurveWorkspace } from '../curve-workspace/curve-workspace';
+import { isPricingRate } from '../../core/curves';
 import { PricingStore } from '../../state/pricing.store';
 
 const sampleScenario = (): EuropeanPriceRequest => ({
@@ -70,7 +78,7 @@ const numericFields = [
 
 @Component({
   selector: 'app-european-pricer',
-  imports: [FormField, DatePipe],
+  imports: [FormField, DatePipe, CurveWorkspace],
   providers: [PricingStore],
   templateUrl: './european-pricer.html',
   styleUrl: './european-pricer.css',
@@ -92,6 +100,7 @@ export class EuropeanPricer implements OnChanges {
   );
   readonly usableSpot = usableSpot;
   readonly copiedSpot = signal('');
+  readonly copiedRate = signal('');
   readonly appliedDate = signal('');
 
   readonly pricing = inject(PricingStore);
@@ -135,6 +144,16 @@ export class EuropeanPricer implements OnChanges {
     this.model.update((model) => ({ ...model, spot: quote[side] }));
     this.copiedSpot.set(`Copied ${side} from ${quote.source_id}, observed ${quote.observed_at}.`);
   }
+  useCurveRate(selection: CurveRateSelection) {
+    if (!isPricingRate(selection.point.zero_rate)) return;
+    if (this.contract() && selection.curve.currency !== this.instrument()?.currency) return;
+    this.pricing.clear();
+    this.model.update((model) => ({ ...model, risk_free_rate: selection.point.zero_rate }));
+    this.copiedRate.set(
+      `Copied ${selection.curve.currency} ${selection.point.tenor_days}-day rate from ${selection.curve.name}; source ${selection.point.source_id}, observed ${selection.point.observed_at}. This is a fixed scenario assumption; refresh does not update it.`,
+    );
+    this.focus();
+  }
   useDate() {
     const time = this.yearFraction();
     if (time === null) return;
@@ -150,6 +169,7 @@ export class EuropeanPricer implements OnChanges {
   editScenario(event: Event) {
     this.pricing.clear();
     const id = (event.target as HTMLElement).id;
+    if (id === 'pricing-risk_free_rate') this.copiedRate.set('');
     if (id === 'pricing-spot') this.copiedSpot.set('');
     if (id === 'pricing-time_to_expiry') this.appliedDate.set('');
   }
@@ -180,6 +200,7 @@ export class EuropeanPricer implements OnChanges {
     this.valuation.set({ date: '' });
     this.valuationForm().reset();
     this.copiedSpot.set('');
+    this.copiedRate.set('');
     this.appliedDate.set('');
     this.scenarioForm().reset();
   }

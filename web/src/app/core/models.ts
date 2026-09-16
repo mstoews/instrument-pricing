@@ -20,3 +20,7 @@ export interface EuropeanPriceRequest {
  dividend_yield: string;
 }
 export interface EuropeanPriceResult { model: 'black_scholes'; price: string }
+
+export interface Curve { id: string; name: string; currency: string }
+export interface CurvePoint { tenor_days: number; zero_rate: string; observed_at: string; source_id: string }
+export interface CurveRateSelection { curve: Curve; point: CurvePoint }
