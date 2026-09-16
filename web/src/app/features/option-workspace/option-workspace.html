@@ -1,0 +1,39 @@
+<header class="topbar"><a class="brand" href="/">P<span> / </span>Pricing platform</a><span class="version">WORKSTATION · V0.1</span><span class="badge">SYNTHETIC DATA</span></header>
+<main>
+ <div class="intro"><div><p class="eyebrow">MARKETS / EQUITY DERIVATIVES</p><h1>Option workspace</h1><p class="muted">Explore instruments, inspect quotes, and compare contracts.</p></div><div class="session">SAMPLE SESSION<span>Quotes &amp; derivatives</span></div></div>
+ <div class="layout">
+ <aside class="panel"><h2>Security search</h2>
+  <form (submit)="$event.preventDefault(); instruments.search(search.value)"><label for="search">Name or identifier</label><div class="search"><input id="search" #search value="AAPL" placeholder="e.g. AAPL" maxlength="100"><button type="submit">Search</button></div></form>
+  @if (instruments.request().isLoading) { <p role="status">Searching…</p> }
+  @if (instruments.request().error; as error) { <p role="alert" class="error">{{ error }}</p> }
+  <div class="results">
+  @for (instrument of instruments.results(); track instrument.id) {
+   <button class="instrument" [class.selected]="instruments.selected()?.id === instrument.id" (click)="select(instrument)"><strong>{{ instrument.name }}</strong><span>{{ instrument.instrument_type }} · {{ instrument.currency }}</span></button>
+  } @empty { @if (instruments.request().isLoaded) { <p class="muted">No matching instruments.</p> } }
+  </div><p class="footnote">Sample fixtures only. These prices do not represent live markets.</p>
+ </aside>
+ <section class="workspace" aria-label="Selected instrument">
+ @if (workspace.instrument(); as instrument) {
+  <div class="panel quote-panel"><div class="panel-heading"><div><p class="eyebrow">SELECTED INSTRUMENT</p><h2>{{ instrument.name }}</h2></div><button class="secondary" (click)="refresh()">Refresh</button></div>
+  @if (workspace.quoteRequest().isLoading) { <p role="status">Loading quote…</p> }
+  @if (workspace.quoteRequest().error; as error) { <p class="error" role="alert">Quote unavailable: {{ error }}</p> }
+  @if (workspace.quote(); as quote) {
+   <div class="quote-grid"><div><label>BID / {{ instrument.currency }}</label><strong>{{ quote.bid }}</strong></div><div><label>ASK / {{ instrument.currency }}</label><strong>{{ quote.ask }}</strong></div><div><label>SOURCE</label><strong class="source">{{ quote.source_id }}</strong></div></div>
+   <p class="footnote">Observed {{ quote.observed_at | date:'medium' }} · Received {{ quote.received_at | date:'medium' }}</p>
+  }
+  </div>
+  <div class="panel chain-panel"><div class="panel-heading"><div><p class="eyebrow">CONTRACT EXPLORER</p><h2>Option chain</h2></div><div><label for="expiry">Expiration</label><select id="expiry" [value]="workspace.expiration()" (change)="workspace.loadChain(expiry.value)" #expiry [disabled]="!workspace.expirations().length">@for (date of workspace.expirations(); track date) { <option [value]="date">{{ date }}</option> }</select></div></div>
+  @if (workspace.expirationsRequest().isLoading || workspace.chainRequest().isLoading) { <p role="status">Loading contracts…</p> }
+  @if (workspace.expirationsRequest().error || workspace.chainRequest().error; as error) { <p class="error" role="alert">{{ error }}</p><button class="secondary" (click)="refresh()">Retry</button> }
+  @if (workspace.expirationsRequest().isLoaded && !workspace.expirations().length) { <p class="empty">No option expirations for this instrument.</p> }
+  @if (workspace.chainRequest().isLoaded) {
+  <div class="table-scroll"><table><caption class="sr-only">Call and put quotes by strike, expiration {{ workspace.expiration() }}</caption><thead><tr><th colspan="2" class="calls">CALLS</th><th>STRIKE</th><th colspan="2" class="puts">PUTS</th></tr><tr><th scope="col">Bid</th><th scope="col">Ask</th><th scope="col">{{ instrument.currency }}</th><th scope="col">Bid</th><th scope="col">Ask</th></tr></thead><tbody>
+  @for (row of workspace.rows(); track row.strike) { <tr><td>{{ row.call?.bid || '—' }}</td><td>{{ row.call?.ask || '—' }}</td><th scope="row">{{ row.strike }}</th><td>{{ row.put?.bid || '—' }}</td><td>{{ row.put?.ask || '—' }}</td></tr> } @empty { <tr><td colspan="5">No contracts for this expiration.</td></tr> }
+  </tbody></table></div><p class="footnote">{{ workspace.chain().length }} contracts · Latest available quotes · Synthetic European contracts</p>
+  }
+  </div>
+ } @else { <div class="panel empty-state"><span class="empty-icon">⌕</span><p class="eyebrow">YOUR MARKET WORKSPACE</p><h2>Select an instrument to begin</h2><p class="muted">Search AAPL and select a result to load its quote and option chain.</p></div> }
+ </section>
+ </div>
+ <footer>PRICING PLATFORM <span>Research prototype · No live feed connected</span></footer>
+</main>

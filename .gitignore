@@ -1,0 +1,8 @@
+web/node_modules/
+web/dist/
+web/.angular/
+.venv/
+__pycache__/
+*.egg-info/
+build/
+.env
