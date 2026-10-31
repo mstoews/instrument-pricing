@@ -8,6 +8,7 @@ import (
 
 var ErrInvalid = errors.New("invalid request")
 var ErrNotFound = errors.New("not found")
+var ErrConflict = errors.New("conflict")
 
 type Instrument struct {
 	ID             string `json:"id"`

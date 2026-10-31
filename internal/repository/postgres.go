@@ -11,17 +11,23 @@ import (
 	"time"
 )
 
-type Postgres struct{ q *db.Queries }
+type Postgres struct {
+	q    *db.Queries
+	conn db.DBTX
+}
 
-func New(d db.DBTX) *Postgres  { return &Postgres{db.New(d)} }
+func New(d db.DBTX) *Postgres  { return &Postgres{db.New(d), d} }
 func uid(s string) pgtype.UUID { var u pgtype.UUID; _ = u.Scan(s); return u }
 func translate(e error) error {
 	if errors.Is(e, pgx.ErrNoRows) {
 		return domain.ErrNotFound
 	}
 	var p *pgconn.PgError
-	if errors.As(e, &p) && (p.Code == "23503" || p.Code == "23514" || p.Code == "22003") {
+	if errors.As(e, &p) && (p.Code == "23503" || p.Code == "23514" || p.Code == "22003" || p.Code == "22008") {
 		return domain.ErrInvalid
+	}
+	if errors.As(e, &p) && p.Code == "23505" {
+		return domain.ErrConflict
 	}
 	return e
 }

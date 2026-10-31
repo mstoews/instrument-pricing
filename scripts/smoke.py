@@ -53,4 +53,27 @@ for path, payload, expected in [
         raise AssertionError('Expected rejection')
     except HTTPError as e:
         assert e.code == expected, (e.code, expected)
+bond_id = '00000000-0000-0000-0000-000000000301'
+bond = get(f"/v1/bonds/{bond_id}")
+assert bond['coupon_frequency'] == 2 and bond['calls'][0]['date'] == '2029-05-15'
+ba = get(f"/v1/bonds/{bond_id}/analytics?settlement=2026-09-15&source=sample&curve_id={curve['id']}")
+assert ba['price_source']['date'] == '2026-09-15' and Decimal(ba['accrued_interest']).quantize(Decimal('0.00001')) == Decimal('1.41667')
+assert ba['z_spread'] and Decimal(ba['yield_to_worst']) <= Decimal(ba['yield_to_maturity'])
+perf = get(f"/v1/instruments/{i['id']}/performance?source=sample&from=2025-09-15&to=2026-09-15&benchmark_id=00000000-0000-0000-0000-000000000201")
+assert perf['observations'] >= 250 and perf['beta'] and perf['sma_200']
+bars = get(f"/v1/market-data/{i['id']}/bars?source=sample&from=2026-09-14&to=2026-09-15")
+assert [b['date'] for b in bars] == ['2026-09-14', '2026-09-15']
+late = dict(instrument_id=i['id'], source_id='sample', date='2026-09-15', open='1', high='1', low='1', close='1')
+with urlopen(Request(base + '/v1/ingestion/bars', data=json.dumps({'bars': [late]}).encode(), headers={'Content-Type': 'application/json'}), timeout=10) as r:
+    assert json.load(r) == {'received': 1, 'inserted': 0}, 'Bar replay overwrote the first payload'
+for path, payload, expected in [
+    ('/v1/ingestion/bars', {'bars': [dict(late, high='0.5')]}, 400),
+    ('/v1/analytics/bond', {'terms': {'maturity': '2031-01-15', 'coupon_rate': '0.05', 'coupon_frequency': 2, 'day_count': '30/360'}, 'settlement': '2031-01-15', 'clean_price': '100'}, 400),
+]:
+    try:
+        urlopen(Request(base+path, data=json.dumps(payload).encode(), headers={'Content-Type':'application/json'}), timeout=10)
+        raise AssertionError('Expected rejection')
+    except HTTPError as e:
+        assert e.code == expected, (e.code, expected)
+print('PASS: security master, price bars, bond analytics, performance')
 print('PASS: search, resolution, option chain, curves, C++ pricing, Python ingestion, precision, replay, late arrival and error contracts')

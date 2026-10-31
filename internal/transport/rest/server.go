@@ -10,7 +10,9 @@ import (
 	"pricing-platform/internal/service"
 )
 
-func reply(w http.ResponseWriter, v any, e error) {
+func reply(w http.ResponseWriter, v any, e error) { replyStatus(w, http.StatusOK, v, e) }
+
+func replyStatus(w http.ResponseWriter, ok int, v any, e error) {
 	w.Header().Set("Content-Type", "application/json")
 	if e != nil {
 		status := 500
@@ -21,6 +23,9 @@ func reply(w http.ResponseWriter, v any, e error) {
 		} else if errors.Is(e, domain.ErrNotFound) {
 			status = 404
 			message = e.Error()
+		} else if errors.Is(e, domain.ErrConflict) {
+			status = 409
+			message = "conflict: an identifier or record already exists"
 		} else {
 			slog.Error("request failed", "error", e)
 		}
@@ -28,21 +33,32 @@ func reply(w http.ResponseWriter, v any, e error) {
 		_ = json.NewEncoder(w).Encode(map[string]string{"error": message})
 		return
 	}
+	w.WriteHeader(ok)
 	_ = json.NewEncoder(w).Encode(v)
 }
-func Handler(s *service.Market, pricer *service.Pricer) http.Handler {
+
+// decode reads exactly one JSON document with no unknown fields.
+func decode(w http.ResponseWriter, r *http.Request, limit int64, v any) bool {
+	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
+	d.DisallowUnknownFields()
+	var extra any
+	if d.Decode(v) != nil || d.Decode(&extra) != io.EOF {
+		reply(w, nil, domain.ErrInvalid)
+		return false
+	}
+	return true
+}
+
+// Handler routes the REST API; securities may be nil to omit security master,
+// history and analytics routes.
+func Handler(s *service.Market, pricer *service.Pricer, securities *service.Securities) http.Handler {
 	m := http.NewServeMux()
+	if securities != nil {
+		routeSecurities(m, securities)
+	}
 	m.HandleFunc("POST /v1/pricing/european", func(w http.ResponseWriter, r *http.Request) {
 		var q domain.EuropeanPriceRequest
-		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16384))
-		d.DisallowUnknownFields()
-		if err := d.Decode(&q); err != nil {
-			reply(w, nil, domain.ErrInvalid)
-			return
-		}
-		var extra any
-		if err := d.Decode(&extra); err != io.EOF {
-			reply(w, nil, domain.ErrInvalid)
+		if !decode(w, r, 16384, &q) {
 			return
 		}
 		v, err := pricer.European(q)
@@ -80,21 +96,13 @@ func Handler(s *service.Market, pricer *service.Pricer) http.Handler {
 	})
 	m.HandleFunc("POST /v1/ingestion/quotes", func(w http.ResponseWriter, r *http.Request) {
 		var q domain.Quote
-		d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16384))
-		d.DisallowUnknownFields()
-		if e := d.Decode(&q); e != nil {
-			reply(w, nil, domain.ErrInvalid)
-			return
-		}
-		var extra any
-		if e := d.Decode(&extra); e != io.EOF {
-			reply(w, nil, domain.ErrInvalid)
+		if !decode(w, r, 16384, &q) {
 			return
 		}
 		e := s.IngestQuote(r.Context(), q)
 		reply(w, map[string]string{"status": "accepted"}, e)
 	})
-	for _, path := range []string{"trades", "curves", "instruments"} {
+	for _, path := range []string{"trades", "curves"} {
 		m.HandleFunc("POST /v1/ingestion/"+path, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotImplemented)

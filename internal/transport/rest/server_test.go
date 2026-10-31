@@ -16,7 +16,7 @@ func (f fakeStore) Quote(context.Context, string) (domain.Quote, error) {
 	return domain.Quote{}, domain.ErrNotFound
 }
 func TestHTTPFailures(t *testing.T) {
-	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}))
+	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil)
 	for _, tc := range []struct {
 		method, path, body string
 		status             int
