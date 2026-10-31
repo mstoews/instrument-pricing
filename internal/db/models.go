@@ -9,11 +9,21 @@ import (
 )
 
 type Bond struct {
+	InstrumentID    pgtype.UUID    `json:"instrument_id"`
+	Issuer          string         `json:"issuer"`
+	Maturity        pgtype.Date    `json:"maturity"`
+	CouponRate      pgtype.Numeric `json:"coupon_rate"`
+	FaceValue       pgtype.Numeric `json:"face_value"`
+	IssueDate       pgtype.Date    `json:"issue_date"`
+	CouponFrequency int16          `json:"coupon_frequency"`
+	DayCount        string         `json:"day_count"`
+	Redemption      pgtype.Numeric `json:"redemption"`
+}
+
+type BondCall struct {
 	InstrumentID pgtype.UUID    `json:"instrument_id"`
-	Issuer       string         `json:"issuer"`
-	Maturity     pgtype.Date    `json:"maturity"`
-	CouponRate   pgtype.Numeric `json:"coupon_rate"`
-	FaceValue    pgtype.Numeric `json:"face_value"`
+	CallDate     pgtype.Date    `json:"call_date"`
+	CallPrice    pgtype.Numeric `json:"call_price"`
 }
 
 type Curve struct {
@@ -46,6 +56,7 @@ type Equity struct {
 	InstrumentID pgtype.UUID `json:"instrument_id"`
 	Exchange     string      `json:"exchange"`
 	Country      string      `json:"country"`
+	Sector       string      `json:"sector"`
 }
 
 type Instrument struct {
@@ -76,6 +87,19 @@ type OptionContract struct {
 	RightType     string         `json:"right_type"`
 	ExerciseStyle string         `json:"exercise_style"`
 	Multiplier    pgtype.Numeric `json:"multiplier"`
+}
+
+type PriceBar struct {
+	InstrumentID pgtype.UUID        `json:"instrument_id"`
+	SourceID     string             `json:"source_id"`
+	BarDate      pgtype.Date        `json:"bar_date"`
+	Open         pgtype.Numeric     `json:"open"`
+	High         pgtype.Numeric     `json:"high"`
+	Low          pgtype.Numeric     `json:"low"`
+	Close        pgtype.Numeric     `json:"close"`
+	AdjClose     pgtype.Numeric     `json:"adj_close"`
+	Volume       pgtype.Numeric     `json:"volume"`
+	ReceivedAt   pgtype.Timestamptz `json:"received_at"`
 }
 
 type Quote struct {
