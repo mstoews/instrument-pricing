@@ -25,7 +25,7 @@ make smoke
 make test
 ```
 
-`make sample` submits a synthetic quote with the current observation time. `make smoke` verifies resolution, search, option expirations/chain, curves, ingestion, decimal precision, idempotency, late arrival ordering, pricing through the C++ engine, and validation over HTTP against real PostgreSQL. It adds synthetic quotes to the local sample database.
+`make sample` submits a synthetic quote with the current observation time. `make smoke` verifies the security master, price bars, bond analytics, performance statistics, resolution, search, option expirations/chain, curves, ingestion, decimal precision, idempotency, late arrival ordering, pricing through the C++ engine, and validation over HTTP against real PostgreSQL. It adds synthetic quotes to the local sample database.
 
 API: `http://127.0.0.1:8080`. Postgres: `127.0.0.1:54329`, database/user/password `pricing`. These are local development defaults. Override `DATABASE_URL` and `HTTP_ADDR` as needed. The API is unauthenticated and binds to loopback by default; add authentication before exposing it beyond local development. Stop API with Ctrl-C and database with `docker compose stop` (data is retained).
 
@@ -33,6 +33,20 @@ API: `http://127.0.0.1:8080`. Postgres: `127.0.0.1:54329`, database/user/passwor
 curl 'http://127.0.0.1:8080/v1/instruments/resolve?scheme=ticker&value=AAPL&venue=XNAS'
 curl 'http://127.0.0.1:8080/v1/options/00000000-0000-0000-0000-000000000001/chain?expiration=2027-01-15'
 ```
+
+## Neon (hosted PostgreSQL)
+
+The API and migrations run unchanged against [Neon](https://neon.tech); only the connection strings differ. In the Neon console create a project and a `pricing` database, then copy both connection strings from **Connect**: the **pooled** one (host contains `-pooler`) for the API, and the **direct** one for migrations, which run DDL inside a single transaction under an advisory lock. Keep `sslmode=require`.
+
+```sh
+cp .env.example .env        # fill in the two Neon URLs; .env is gitignored
+set -a; . ./.env; set +a
+make migrate                # uses MIGRATE_DATABASE_URL, falling back to DATABASE_URL
+make seed                   # optional synthetic sample data
+make api
+```
+
+Neon suspends idle computes; the API allows 20 seconds for the first ping (a cold start takes a few seconds) and recycles idle pool connections after four minutes. When `HTTP_ADDR` is unset, the API binds `:$PORT` if `PORT` is set (Cloud Run and similar), else `127.0.0.1:8080`. Never commit credentials; use your platform's secret store for `DATABASE_URL` in deployed environments. Neon branches are a convenient way to give each feature branch or CI run its own copy of the database.
 
 To install Python as a package, optionally create a virtual environment and run `pip install -e ./ingestion`; then use `pricing-ingest`. The Make targets need no Python dependencies.
 
@@ -86,7 +100,15 @@ web/ → components → NgRx Signal Stores → HTTP services → Go REST
 | GET | `/v1/curves/{id}/points` | Latest snapshot points, sorted by tenor days |
 | POST | `/v1/pricing/european` | Stateless European Black-Scholes scenario price, per unit |
 | POST | `/v1/ingestion/quotes` | Persist normalized quote; 200 accepted, including identical replay |
-| POST | `/v1/ingestion/instruments`, `/trades`, `/curves` | Explicit 501 stubs |
+| POST | `/v1/instruments/equities` | Create an equity with identifiers; 201 `{"id"}`, 409 on a duplicate identifier |
+| POST | `/v1/instruments/bonds` | Create a bond with terms, call schedule and identifiers; 201 `{"id"}`, 409 on duplicate |
+| GET | `/v1/bonds/{id}` | Bond terms, current identifiers and call schedule |
+| GET | `/v1/bonds/{id}/analytics?settlement=2026-09-15&source=sample` | Analytics from the latest bar close on or before settlement; or pass `clean_price` or `yield`; optional `curve_id` adds a Z-spread |
+| POST | `/v1/analytics/bond` | Stateless bond analytics scenario |
+| GET | `/v1/market-data/{id}/bars?source=sample&from=2026-01-01&to=2026-09-15` | Daily bars for one source, ascending, up to 20,000 |
+| GET | `/v1/instruments/{id}/performance?source=sample&from=…&to=…` | Return/risk statistics; optional `benchmark_id`, `risk_free_rate` |
+| POST | `/v1/ingestion/bars` | Persist up to 5,000 daily bars in one transaction; `{"received","inserted"}` |
+| POST | `/v1/ingestion/trades`, `/curves` | Explicit 501 stubs |
 
 Quote request:
 
@@ -131,6 +153,32 @@ All eight fields are required. `exercise_style` must be `european`; `right_type`
 This endpoint prices explicit scenarios: it does not look up instruments, pick quote sides, construct curves, infer a valuation date/day-count convention, apply contract multipliers, or persist results. The result is in the same currency units as spot and strike. The C++ model uses binary floating-point; a decimal-string response preserves the computed double for transport, not exact decimal arithmetic or guaranteed decimal precision. Invalid requests and numerical overflow return 400; unexpected native failures return a generic 500. Requests are limited to 16 KiB and reject unknown fields or extra JSON documents. The frontend scenario form calls this endpoint through `PricingService` and a component-scoped `PricingStore`.
 
 European options only; continuously compounded rates/dividend yield and time in years. Handles expiry and zero volatility explicitly. Tests cover reference call/put values, dividend-adjusted put-call parity, expiry payoff, deterministic zero volatility, and invalid inputs. Synthetic AAPL contracts are intentionally European for this demo; they do not represent actual listed AAPL contract specifications.
+
+## Security master, price history and analytics
+
+Analytics are pure Go (`internal/analytics`), independent of persistence and transport; `service.Securities` validates decimal-string inputs and formats float64 results as decimal strings, like the option pricer.
+
+**Security master.** Instruments are created with one to twenty identifiers (`scheme` is lowercase, e.g. `ticker`, `isin`, `cusip`, `figi`); ISIN and CUSIP check digits are verified. Bond terms: `coupon_rate` is a decimal fraction (`"0.0425"` = 4.25%), `coupon_frequency` is 0 (zero coupon), 1, 2, 4 or 12, `day_count` is `30/360` (US bond basis), `ACT/360`, `ACT/365F` or `ACT/ACT` (ICMA), and `redemption` and call prices are per 100 of face (redemption defaults to 100). `face_value` is the denomination and does not scale analytics.
+
+```sh
+curl -X POST http://127.0.0.1:8080/v1/instruments/bonds -H 'Content-Type: application/json' -d '{
+  "name":"Apple 3.85% 2043","currency":"USD","issuer":"Apple Inc.","issue_date":"2013-05-03","maturity":"2043-05-04",
+  "coupon_rate":"0.0385","coupon_frequency":2,"day_count":"30/360","face_value":"1000",
+  "calls":[{"date":"2042-11-04","price":"100"}],"identifiers":[{"scheme":"cusip","value":"037833AL4","venue":""}]}'
+```
+
+**Price history.** `price_bar` holds one daily bar per instrument, source and date. Equity bars are in currency units; bond bars are clean prices per 100. `adj_close` is optional and vendor-supplied. Like quotes, bars are append-only: replaying a key keeps the first payload, and the response's `inserted` count says how many were new. Every history read names its `source`; sources are never mixed or prioritized silently.
+
+**Bond analytics.** These cover fixed-rate bullet bonds with discrete calls. Coupon dates are generated backward from maturity, with the end-of-month rule when maturity falls on a month end. Settlement must be on or after issue and before maturity. Results: clean, dirty and accrued prices per 100, yield to maturity (compounded at the coupon frequency, semiannual for zeros), yield to worst across maturity and future call dates (a call between coupon dates pays the accrued coupon), workout date, Macaulay and modified duration in years, convexity, DV01 per 100 face, the remaining cash flows, and optionally a Z-spread. The Z-spread is a constant spread over the curve's continuously compounded zero rates, interpolated linearly in tenor days with flat extrapolation; tenors are measured from settlement. Durations and convexity are computed to maturity. Not modelled: odd first or last coupons (accrual starts at issue but the first coupon is regular), business-day adjustment, ex-dividend periods, floating rates, sinking funds, and option-adjusted spread.
+
+```sh
+curl -X POST http://127.0.0.1:8080/v1/analytics/bond -H 'Content-Type: application/json' -d '{
+  "terms":{"maturity":"2046-01-15","coupon_rate":"0.06","coupon_frequency":2,"day_count":"30/360"},
+  "settlement":"2026-01-15","yield":"0.08","curve":[{"tenor_days":365,"zero_rate":"0.04"}]}'
+# clean_price ≈ 80.2072261, modified_duration ≈ 10.5023952, convexity ≈ 162.319493
+```
+
+**Performance.** Statistics use simple daily returns over the bars in `[from, to]`, annualized with 252 trading days: total and annualized (calendar CAGR) return, annualized volatility, Sharpe ratio against `risk_free_rate` (an annual decimal, default 0), maximum drawdown, and the latest 20, 50 and 200-bar simple moving averages when there is enough history. Pass `benchmark_id` to add beta and correlation, aligned on dates both series share. `adj_close` is used only when every bar of both series has it (`price_field` in the response says which). Valuation ratios need a fundamentals feed and are future work.
 
 ## Validation
 

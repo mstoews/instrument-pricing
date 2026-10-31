@@ -23,22 +23,34 @@ func main() {
 	if dsn == "" {
 		log.Fatal("DATABASE_URL is required")
 	}
-	pool, e := pgxpool.New(ctx, dsn)
+	cfg, e := pgxpool.ParseConfig(dsn)
+	if e != nil {
+		log.Fatal(e)
+	}
+	// Neon suspends idle computes; recycle idle connections before the compute
+	// drops them, and allow a cold start (a few seconds) on the first ping.
+	cfg.MaxConnIdleTime = 4 * time.Minute
+	cfg.HealthCheckPeriod = time.Minute
+	pool, e := pgxpool.NewWithConfig(ctx, cfg)
 	if e != nil {
 		log.Fatal(e)
 	}
 	defer pool.Close()
-	ping, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ping, cancel := context.WithTimeout(ctx, 20*time.Second)
 	e = pool.Ping(ping)
 	cancel()
 	if e != nil {
 		log.Fatal(e)
 	}
 	addr := os.Getenv("HTTP_ADDR")
+	if port := os.Getenv("PORT"); addr == "" && port != "" {
+		addr = ":" + port // container platforms such as Cloud Run inject PORT
+	}
 	if addr == "" {
 		addr = "127.0.0.1:8080"
 	}
-	server := &http.Server{Addr: addr, Handler: rest.Handler(service.New(repository.New(pool)), service.NewPricer(pricing.Engine{})), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
+	repo := repository.New(pool)
+	server := &http.Server{Addr: addr, Handler: rest.Handler(service.New(repo), service.NewPricer(pricing.Engine{}), service.NewSecurities(repo)), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
