@@ -71,16 +71,18 @@ func TestCreateBondValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	mutations := map[string]func(*domain.NewBond){
-		"no identifiers":  func(x *domain.NewBond) { x.Identifiers = nil },
-		"bad cusip":       func(x *domain.NewBond) { x.Identifiers = []domain.Identifier{{Scheme: "cusip", Value: "037833101"}} },
-		"no frequency":    func(x *domain.NewBond) { x.CouponFrequency = nil },
-		"bad frequency":   func(x *domain.NewBond) { x.CouponFrequency = freq(3) },
-		"zero w/ coupon":  func(x *domain.NewBond) { x.CouponFrequency = freq(0) },
-		"bad day count":   func(x *domain.NewBond) { x.DayCount = "BUS/252" },
-		"percent coupon":  func(x *domain.NewBond) { x.CouponRate = "6%" },
-		"no face":         func(x *domain.NewBond) { x.FaceValue = "" },
-		"call at expiry":  func(x *domain.NewBond) { x.Calls = []domain.BondCall{{Date: "2046-01-15", Price: "100"}} },
-		"dup calls":       func(x *domain.NewBond) { x.Calls = []domain.BondCall{{Date: "2030-01-15", Price: "100"}, {Date: "2030-01-15", Price: "101"}} },
+		"no identifiers": func(x *domain.NewBond) { x.Identifiers = nil },
+		"bad cusip":      func(x *domain.NewBond) { x.Identifiers = []domain.Identifier{{Scheme: "cusip", Value: "037833101"}} },
+		"no frequency":   func(x *domain.NewBond) { x.CouponFrequency = nil },
+		"bad frequency":  func(x *domain.NewBond) { x.CouponFrequency = freq(3) },
+		"zero w/ coupon": func(x *domain.NewBond) { x.CouponFrequency = freq(0) },
+		"bad day count":  func(x *domain.NewBond) { x.DayCount = "BUS/252" },
+		"percent coupon": func(x *domain.NewBond) { x.CouponRate = "6%" },
+		"no face":        func(x *domain.NewBond) { x.FaceValue = "" },
+		"call at expiry": func(x *domain.NewBond) { x.Calls = []domain.BondCall{{Date: "2046-01-15", Price: "100"}} },
+		"dup calls": func(x *domain.NewBond) {
+			x.Calls = []domain.BondCall{{Date: "2030-01-15", Price: "100"}, {Date: "2030-01-15", Price: "101"}}
+		},
 		"issue after mat": func(x *domain.NewBond) { x.IssueDate = "2047-01-01" },
 		"bad currency":    func(x *domain.NewBond) { x.Currency = "usd" },
 	}
