@@ -33,3 +33,5 @@ UPDATE api_key SET last_used_at=now() WHERE id=sqlc.arg(id)::uuid;
 SELECT k.id::text AS id,k.name,k.scope,u.email AS owner,k.created_at,k.last_used_at,k.revoked_at FROM api_key k JOIN app_user u ON u.id=k.user_id ORDER BY k.created_at,k.id;
 -- name: RevokeAPIKey :execrows
 UPDATE api_key SET revoked_at=now() WHERE id=sqlc.arg(id)::uuid AND revoked_at IS NULL;
+-- name: FamilyByRefresh :one
+SELECT family_id::text AS family_id FROM auth_session WHERE refresh_hash=sqlc.arg(refresh_hash);

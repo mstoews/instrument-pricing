@@ -113,6 +113,7 @@ type AuthStore interface {
 	// to the successor that decide returns.
 	RotateRefresh(ctx context.Context, refreshHash []byte, decide func(RefreshState) (next *NewSession, revokeFamily bool)) error
 	RevokeFamily(context.Context, string) error
+	FamilyByRefresh(context.Context, []byte) (string, error)
 	CreateAPIKey(ctx context.Context, userID, name, scope string, hash []byte) (APIKey, error)
 	APIKeyByHash(context.Context, []byte) (Principal, *time.Time, error)
 	TouchAPIKey(context.Context, string) error

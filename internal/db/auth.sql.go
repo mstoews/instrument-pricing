@@ -37,6 +37,17 @@ func (q *Queries) APIKeyByHash(ctx context.Context, keyHash []byte) (APIKeyByHas
 	return i, err
 }
 
+const familyByRefresh = `-- name: FamilyByRefresh :one
+SELECT family_id::text AS family_id FROM auth_session WHERE refresh_hash=$1
+`
+
+func (q *Queries) FamilyByRefresh(ctx context.Context, refreshHash []byte) (string, error) {
+	row := q.db.QueryRow(ctx, familyByRefresh, refreshHash)
+	var family_id string
+	err := row.Scan(&family_id)
+	return family_id, err
+}
+
 const insertAPIKey = `-- name: InsertAPIKey :one
 INSERT INTO api_key(user_id,name,scope,key_hash) VALUES($1::uuid,$2,$3,$4)
 RETURNING id::text AS id,created_at

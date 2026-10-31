@@ -83,8 +83,14 @@ func routeAuth(rt router, a *service.Auth) {
 		v, e := a.Refresh(r.Context(), q.RefreshToken, r.UserAgent())
 		reply(w, v, e)
 	})
-	rt.handle("POST /v1/auth/logout", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
-		reply(w, map[string]string{"status": "logged_out"}, a.Logout(r.Context(), principal(r)))
+	rt.handle("POST /v1/auth/logout", domain.PermPublic, func(w http.ResponseWriter, r *http.Request) {
+		var q struct {
+			RefreshToken string `json:"refresh_token"`
+		}
+		if !decode(w, r, 4096, &q) {
+			return
+		}
+		reply(w, map[string]string{"status": "logged_out"}, a.Logout(r.Context(), q.RefreshToken))
 	})
 	rt.handle("GET /v1/auth/me", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
 		p := principal(r)

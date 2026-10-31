@@ -82,6 +82,11 @@ func (p *Postgres) RevokeFamily(c context.Context, family string) error {
 	return translate(p.q.RevokeFamily(c, uid(family)))
 }
 
+func (p *Postgres) FamilyByRefresh(c context.Context, h []byte) (string, error) {
+	f, e := p.q.FamilyByRefresh(c, h)
+	return f, translate(e)
+}
+
 func (p *Postgres) CreateAPIKey(c context.Context, userID, name, scope string, h []byte) (domain.APIKey, error) {
 	x, e := p.q.InsertAPIKey(c, db.InsertAPIKeyParams{UserID: uid(userID), Name: name, Scope: scope, KeyHash: h})
 	if e != nil {

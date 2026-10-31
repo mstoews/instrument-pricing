@@ -225,13 +225,23 @@ func (a *Auth) Refresh(c context.Context, token, userAgent string) (domain.Token
 	return pair, nil
 }
 
-// Logout revokes the caller's session family: this login and every token
-// refreshed from it. Other logins (other devices) stay signed in.
-func (a *Auth) Logout(c context.Context, p domain.Principal) error {
-	if p.FamilyID == "" {
-		return invalid("API keys cannot log out; revoke the key instead")
+// Logout revokes the session family of a refresh token: that login and every
+// token refreshed from it; other logins (other devices) stay signed in. It
+// takes the refresh token, which clients always hold, so it works after the
+// access token has expired or been rotated by another tab. Unknown tokens
+// succeed silently, so the response reveals nothing.
+func (a *Auth) Logout(c context.Context, refreshToken string) error {
+	if !auth.WellFormed(refreshToken, auth.RefreshPrefix) {
+		return nil
 	}
-	return a.store.RevokeFamily(c, p.FamilyID)
+	family, err := a.store.FamilyByRefresh(c, auth.Digest(refreshToken))
+	if errors.Is(err, domain.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	return a.store.RevokeFamily(c, family)
 }
 
 // Authenticate resolves a bearer credential to a principal.

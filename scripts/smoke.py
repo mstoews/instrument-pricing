@@ -51,7 +51,7 @@ assert any(k['id'] == reader['id'] for k in get('/v1/auth/api-keys', bearer(sess
 req = Request(base + f"/v1/auth/api-keys/{reader['id']}", headers=bearer(session), method='DELETE')
 urlopen(req, timeout=10).close()
 assert status(lambda: get('/v1/instruments?q=AAPL', headers=read_auth)) == 401, 'revoked key accepted'
-post('/v1/auth/logout', {}, headers=bearer(session))
+post('/v1/auth/logout', {'refresh_token': session['refresh_token']}, headers={})
 assert status(lambda: get('/v1/auth/me', bearer(session))) == 401
 print('PASS: login, refresh rotation and reuse revocation, logout, API key scopes and revocation, permissions')
 

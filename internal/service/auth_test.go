@@ -102,6 +102,14 @@ func (m *memAuth) RevokeFamily(_ context.Context, f string) error {
 	}
 	return nil
 }
+func (m *memAuth) FamilyByRefresh(_ context.Context, h []byte) (string, error) {
+	for _, s := range m.sessions {
+		if string(s.RefreshHash) == string(h) {
+			return s.FamilyID, nil
+		}
+	}
+	return "", domain.ErrNotFound
+}
 func (m *memAuth) CreateAPIKey(_ context.Context, userID, name, scope string, h []byte) (domain.APIKey, error) {
 	k := domain.APIKey{ID: newUUID(), Name: name, Scope: scope, Owner: userID}
 	m.keys[k.ID], m.keyHash[string(h)] = k, k.ID
@@ -180,9 +188,21 @@ func TestLogoutRevokesOnlyThatLogin(t *testing.T) {
 	c := context.Background()
 	phone, _ := a.Login(c, domain.Credentials{Email: "admin@example.com", Password: pw}, "ios")
 	web, _ := a.Login(c, domain.Credentials{Email: "admin@example.com", Password: pw}, "web")
-	p, _ := a.Authenticate(c, phone.AccessToken)
-	if err := a.Logout(c, p); err != nil {
+	// Logout works with the refresh token even after the access token was rotated away.
+	rotated, err := a.Refresh(c, phone.RefreshToken, "")
+	if err != nil {
 		t.Fatal(err)
+	}
+	if err := a.Logout(c, rotated.RefreshToken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.Authenticate(c, rotated.AccessToken); err == nil {
+		t.Fatal("logged-out token valid")
+	}
+	for _, tok := range []string{"", "nonsense", rotated.RefreshToken} {
+		if err := a.Logout(c, tok); err != nil {
+			t.Fatalf("logout(%q) should succeed silently: %v", tok, err)
+		}
 	}
 	if _, err := a.Authenticate(c, phone.AccessToken); err == nil {
 		t.Fatal("logged-out token valid")
@@ -244,9 +264,6 @@ func TestRegisterAndAPIKeys(t *testing.T) {
 	_, _ = a.Authenticate(c, k.Key)
 	if m.touches != 1 {
 		t.Fatalf("last_used_at written %d times", m.touches)
-	}
-	if err := a.Logout(c, p); !errors.Is(err, domain.ErrInvalid) {
-		t.Fatal("api key logout")
 	}
 	if err := a.RevokeAPIKey(c, k.ID); err != nil {
 		t.Fatal(err)
