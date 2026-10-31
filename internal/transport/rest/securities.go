@@ -6,8 +6,8 @@ import (
 	"pricing-platform/internal/service"
 )
 
-func routeSecurities(m *http.ServeMux, s *service.Securities) {
-	m.HandleFunc("POST /v1/instruments/equities", func(w http.ResponseWriter, r *http.Request) {
+func routeSecurities(rt router, s *service.Securities) {
+	rt.handle("POST /v1/instruments/equities", domain.PermWrite, func(w http.ResponseWriter, r *http.Request) {
 		var q domain.NewEquity
 		if !decode(w, r, 65536, &q) {
 			return
@@ -15,7 +15,7 @@ func routeSecurities(m *http.ServeMux, s *service.Securities) {
 		id, e := s.CreateEquity(r.Context(), q)
 		replyStatus(w, http.StatusCreated, map[string]string{"id": id}, e)
 	})
-	m.HandleFunc("POST /v1/instruments/bonds", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("POST /v1/instruments/bonds", domain.PermWrite, func(w http.ResponseWriter, r *http.Request) {
 		var q domain.NewBond
 		if !decode(w, r, 65536, &q) {
 			return
@@ -23,17 +23,17 @@ func routeSecurities(m *http.ServeMux, s *service.Securities) {
 		id, e := s.CreateBond(r.Context(), q)
 		replyStatus(w, http.StatusCreated, map[string]string{"id": id}, e)
 	})
-	m.HandleFunc("GET /v1/bonds/{id}", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("GET /v1/bonds/{id}", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
 		v, e := s.Bond(r.Context(), r.PathValue("id"))
 		reply(w, v, e)
 	})
-	m.HandleFunc("GET /v1/bonds/{id}/analytics", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("GET /v1/bonds/{id}/analytics", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		v, e := s.StoredBondAnalytics(r.Context(), r.PathValue("id"), domain.StoredBondQuery{Settlement: q.Get("settlement"),
 			CleanPrice: q.Get("clean_price"), Yield: q.Get("yield"), SourceID: q.Get("source"), CurveID: q.Get("curve_id")})
 		reply(w, v, e)
 	})
-	m.HandleFunc("POST /v1/analytics/bond", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("POST /v1/analytics/bond", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
 		var q domain.BondAnalyticsRequest
 		if !decode(w, r, 65536, &q) {
 			return
@@ -41,18 +41,18 @@ func routeSecurities(m *http.ServeMux, s *service.Securities) {
 		v, e := s.BondAnalytics(q)
 		reply(w, v, e)
 	})
-	m.HandleFunc("GET /v1/market-data/{id}/bars", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("GET /v1/market-data/{id}/bars", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		v, e := s.Bars(r.Context(), r.PathValue("id"), q.Get("source"), q.Get("from"), q.Get("to"))
 		reply(w, v, e)
 	})
-	m.HandleFunc("GET /v1/instruments/{id}/performance", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("GET /v1/instruments/{id}/performance", domain.PermRead, func(w http.ResponseWriter, r *http.Request) {
 		q := r.URL.Query()
 		v, e := s.Performance(r.Context(), r.PathValue("id"), domain.PerformanceQuery{SourceID: q.Get("source"), From: q.Get("from"),
 			To: q.Get("to"), BenchmarkID: q.Get("benchmark_id"), RiskFreeRate: q.Get("risk_free_rate")})
 		reply(w, v, e)
 	})
-	m.HandleFunc("POST /v1/ingestion/bars", func(w http.ResponseWriter, r *http.Request) {
+	rt.handle("POST /v1/ingestion/bars", domain.PermWrite, func(w http.ResponseWriter, r *http.Request) {
 		var q struct {
 			Bars []domain.PriceBar `json:"bars"`
 		}

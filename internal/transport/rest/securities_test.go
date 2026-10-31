@@ -20,7 +20,7 @@ func (fakeSecurities) CreateBond(context.Context, domain.NewBond) (string, error
 }
 
 func TestSecuritiesHTTP(t *testing.T) {
-	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), service.NewSecurities(fakeSecurities{}))
+	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), service.NewSecurities(fakeSecurities{}), nil)
 	bond := `{"name":"Sample 5% 2031","currency":"USD","issuer":"Sample","maturity":"2031-01-15","coupon_rate":"0.05","coupon_frequency":2,"day_count":"30/360","face_value":"1000","calls":[],"identifiers":[{"scheme":"isin","value":"US0378331005","venue":""}]}`
 	scenario := `{"terms":{"maturity":"2031-01-15","coupon_rate":"0.05","coupon_frequency":2,"day_count":"30/360"},"settlement":"2026-01-15","clean_price":"100"}`
 	for _, tc := range []struct {

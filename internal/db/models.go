@@ -8,6 +8,40 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiKey struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Name       string             `json:"name"`
+	Scope      string             `json:"scope"`
+	KeyHash    []byte             `json:"key_hash"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+}
+
+type AppUser struct {
+	ID           pgtype.UUID        `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Role         string             `json:"role"`
+	Disabled     bool               `json:"disabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type AuthSession struct {
+	ID               pgtype.UUID        `json:"id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	FamilyID         pgtype.UUID        `json:"family_id"`
+	AccessHash       []byte             `json:"access_hash"`
+	RefreshHash      []byte             `json:"refresh_hash"`
+	AccessExpiresAt  pgtype.Timestamptz `json:"access_expires_at"`
+	RefreshExpiresAt pgtype.Timestamptz `json:"refresh_expires_at"`
+	RotatedAt        pgtype.Timestamptz `json:"rotated_at"`
+	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
+	UserAgent        string             `json:"user_agent"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Bond struct {
 	InstrumentID    pgtype.UUID    `json:"instrument_id"`
 	Issuer          string         `json:"issuer"`

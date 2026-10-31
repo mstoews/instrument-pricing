@@ -48,7 +48,7 @@ func priceHTTP(t *testing.T, h http.Handler, payload map[string]any) float64 {
 
 // These tests cross REST validation, the service, cgo, and the actual C++ engine.
 func TestEuropeanPricingHTTP(t *testing.T) {
-	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil)
+	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil, nil)
 	for _, tc := range []struct {
 		name    string
 		changes map[string]any
@@ -75,7 +75,7 @@ func TestEuropeanPricingHTTP(t *testing.T) {
 }
 
 func TestEuropeanDividendParityHTTP(t *testing.T) {
-	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil)
+	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil, nil)
 	payload := pricingPayload()
 	payload["dividend_yield"] = "0.02"
 	call := priceHTTP(t, h, payload)
@@ -88,7 +88,7 @@ func TestEuropeanDividendParityHTTP(t *testing.T) {
 }
 
 func TestEuropeanPricingRejectsInvalidHTTP(t *testing.T) {
-	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil)
+	h := Handler(service.New(fakeStore{}), service.NewPricer(pricing.Engine{}), nil, nil)
 	reject := func(t *testing.T, body string) {
 		t.Helper()
 		w := httptest.NewRecorder()
@@ -151,7 +151,7 @@ func (brokenEngine) Price(domain.PricingInputs) (float64, error) {
 }
 
 func TestEuropeanPricingInternalError(t *testing.T) {
-	h := Handler(service.New(fakeStore{}), service.NewPricer(brokenEngine{}), nil)
+	h := Handler(service.New(fakeStore{}), service.NewPricer(brokenEngine{}), nil, nil)
 	body, _ := json.Marshal(pricingPayload())
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, httptest.NewRequest("POST", "/v1/pricing/european", strings.NewReader(string(body))))
