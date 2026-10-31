@@ -1,0 +1,33 @@
+<header class="topbar"><span class="brand">P<span> / </span>Pricing platform</span><span class="version">WORKSTATION · V0.1</span></header>
+<main class="login-main">
+ <section class="panel login-panel" aria-labelledby="login-heading">
+  <p class="eyebrow">SECURE ACCESS</p>
+  <h1 id="login-heading">Sign in</h1>
+  <p class="muted">Use the account your administrator created for you.</p>
+  @if (auth.notice(); as notice) { <p class="notice" role="status">{{ notice }}</p> }
+  <form novalidate (submit)="$event.preventDefault(); signIn()" (input)="edited()">
+   <div class="login-field">
+    <label for="login-email">Email</label>
+    <input id="login-email" type="email" autocomplete="username" spellcheck="false"
+     [formField]="loginForm.email" aria-describedby="error-email"
+     [attr.aria-invalid]="loginForm.email().touched() && loginForm.email().invalid()" />
+    <div id="error-email">
+     @if (loginForm.email().touched()) { @for (error of loginForm.email().errors(); track $index) { <p class="error field-error">{{ error.message }}</p> } }
+    </div>
+   </div>
+   <div class="login-field">
+    <label for="login-password">Password</label>
+    <input id="login-password" type="password" autocomplete="current-password"
+     [formField]="loginForm.password" aria-describedby="error-password"
+     [attr.aria-invalid]="loginForm.password().touched() && loginForm.password().invalid()" />
+    <div id="error-password">
+     @if (loginForm.password().touched()) { @for (error of loginForm.password().errors(); track $index) { <p class="error field-error">{{ error.message }}</p> } }
+    </div>
+   </div>
+   <label class="remember"><input type="checkbox" [formField]="loginForm.remember" /> Keep me signed in on this device</label>
+   <p class="footnote remember-help">Leave unchecked on shared computers: you will be signed out when this tab closes.</p>
+   @if (auth.request().error; as error) { <p class="error" role="alert">{{ error }}</p> }
+   <button type="submit" class="login-submit" [disabled]="auth.request().isLoading">{{ auth.request().isLoading ? 'Signing in…' : 'Sign in' }}</button>
+  </form>
+ </section>
+</main>

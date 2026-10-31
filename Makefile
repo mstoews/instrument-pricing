@@ -10,7 +10,7 @@ seed:
 	psql "$(DATABASE_URL)" -v ON_ERROR_STOP=1 -1 -f db/seed.sql
 api:
 	go run ./cmd/api
-# Open API for the web frontend until it has a login screen; refused off loopback.
+# Open API for local exploration with curl; refused off loopback. The web app needs `make api`.
 api-noauth:
 	AUTH_DISABLED=true go run ./cmd/api
 generate:

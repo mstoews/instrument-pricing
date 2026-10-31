@@ -47,12 +47,14 @@ All routes except `/healthz`, login, refresh and sign-up require `Authorization:
 | API key, scope `read` | yes | 403 | 403 |
 | API key, scope `ingest` | yes | yes | 403 |
 
-- **Sessions.** Login returns an access token (`ipa_…`, 15 minutes) and a refresh token (`ipr_…`, 30 days); override with `ACCESS_TOKEN_TTL` and `REFRESH_TOKEN_TTL` (Go durations, e.g. `30m`, `720h`). Each refresh returns a new pair and retires the old one. Presenting a retired refresh token again is treated as theft and revokes every token from that login, so **clients must serialize refreshes** (one in flight, shared by concurrent requests). Logout revokes the calling login only; other devices stay signed in.
+- **Sessions.** Login returns an access token (`ipa_…`, 15 minutes) and a refresh token (`ipr_…`, 30 days); override with `ACCESS_TOKEN_TTL` and `REFRESH_TOKEN_TTL` (Go durations, e.g. `30m`, `720h`). Each refresh returns a new pair and retires the old one. Presenting a retired refresh token again is treated as theft and revokes every token from that login, so **clients must serialize refreshes** (one in flight, shared by concurrent requests). Logout takes the refresh token (so it works after the access token has expired) and revokes that login only; other devices stay signed in.
 - **API keys** (`ipk_…`) are for machines such as the Python ingestion pipeline. An admin creates them over the API or with `cmd/useradmin`; the key is shown once. `RestSink` and `pricing-ingest` read `PRICING_API_KEY` (or `--api-key`).
 - **Storage.** Passwords use argon2id (19 MiB, 2 passes; parameters are stored per hash). Tokens are 256-bit random values; only their SHA-256 digests are stored, so a database leak exposes no usable credential. Each authenticated request does one indexed lookup.
 - **Accounts.** Self-service sign-up is off unless `AUTH_ALLOW_SIGNUP=true` and creates `user`-role accounts. Admins are created with `go run ./cmd/useradmin user -email … -role admin` (password from `USERADMIN_PASSWORD` or stdin; re-running it updates the password and role and re-enables the account). Passwords must be 12–128 characters.
 - **Abuse limits.** After 10 failed logins for one email in 15 minutes, that email gets 429 until the window ends (this also means an attacker can temporarily lock an account). Sign-up is limited to 5 per client address per hour. Limits are in memory and per instance. Unknown emails cost the same password work as wrong passwords.
-- **Local development only.** `AUTH_DISABLED=true` (`make api-noauth`) opens every route and is refused unless `HTTP_ADDR` is a loopback address.
+- **Local development only.** `AUTH_DISABLED=true` (`make api-noauth`) opens every route for API exploration and is refused unless `HTTP_ADDR` is a loopback address. The web app always shows its sign-in page, so use `make api` with it.
+
+**Web app.** `/login` signs in and returns to the page the user asked for (same-origin paths only). An HTTP interceptor adds the access token to `/v1` calls and refreshes it shortly before it expires. On a 401 it makes one shared refresh and retries once; if the refresh is rejected, the user returns to sign-in with a "session expired" notice. The access token is kept in memory only. The refresh token is stored in `sessionStorage` (this tab, cleared when it closes), or in `localStorage` when **Keep me signed in** is checked. Tabs that share `localStorage` serialize refreshes with the Web Locks API and re-read the stored token inside the lock, so two tabs never spend the same single-use refresh token. Signing out in one tab signs out the others. Trade-off: a persisted refresh token is readable by script running on the page (XSS). The app loads no third-party scripts; an HttpOnly refresh cookie is the stronger option if that changes.
 
 Not yet implemented: password change and reset, email verification, MFA, disabling users through the API, OAuth/social sign-in, and pruning expired session rows.
 
@@ -74,7 +76,7 @@ To install Python as a package, optionally create a virtual environment and run 
 
 ## Run the frontend
 
-Use Node.js 24 LTS or another Angular 22 supported release and npm. The frontend has no login screen yet, so run the API with `make api-noauth` (authentication off; refused unless `HTTP_ADDR` is a loopback address). In a third terminal:
+Use Node.js 24 LTS or another Angular 22 supported release and npm. With the API running (`make api`) and a user created with `cmd/useradmin` (see **Local run**), in a third terminal:
 
 ```sh
 cd web
@@ -82,7 +84,7 @@ npm ci
 npm start
 ```
 
-Open http://127.0.0.1:4200 and select **Apple Inc. (sample)**. Development requests to `/v1` are proxied to the local Go API. For production hosting, route `/v1` to Go on the same origin; the development proxy is not included in the build. `npm run build` writes to `web/dist/web`.
+Open http://127.0.0.1:4200, sign in, and select **Apple Inc. (sample)**. Signing in is described under **Authentication → Web app**. Development requests to `/v1` are proxied to the local Go API. For production hosting, route `/v1` to Go on the same origin; the development proxy is not included in the build. `npm run build` writes to `web/dist/web`.
 
 The **European option pricer** below the market workspace starts with the documented sample scenario. Edit the call/put choice, spot, strike, year fraction, volatility, rate, and dividend yield, then choose **Calculate price**. The sample scenario is independent of instrument selection. To start from a contract, choose **Use call** or **Use put** in the option chain; this copies strike/right and clears market assumptions. Explicitly copy an underlying bid or ask, or enter spot manually. Enter a valuation date and choose **Use ACT/365F** to calculate calendar days to expiration divided by 365 (UTC date-only, rounded to eight decimals), or enter years manually. Volatility and rates must be supplied. Editing inputs clears old results and cancels pending calculations. Changing instrument, expiry, or refreshing clears the linked contract. **Reset contract inputs** restores the contract with empty assumptions; **Use sample scenario** returns to the sample defaults.
 
@@ -116,7 +118,7 @@ web/ → components → NgRx Signal Stores → HTTP services → Go REST
 | POST | `/v1/auth/login` | `{"email","password"}` → access and refresh tokens (public) |
 | POST | `/v1/auth/refresh` | `{"refresh_token"}` → a new token pair; the old pair stops working (public) |
 | POST | `/v1/auth/register` | Self-service `user` account, only when `AUTH_ALLOW_SIGNUP=true` (public) |
-| POST | `/v1/auth/logout` | Revoke the calling login's tokens |
+| POST | `/v1/auth/logout` | `{"refresh_token"}` → revoke that login's tokens; always 200 (public) |
 | GET | `/v1/auth/me` | The authenticated caller |
 | POST/GET | `/v1/auth/api-keys` | Admin session: create (key returned once) / list API keys |
 | DELETE | `/v1/auth/api-keys/{id}` | Admin session: revoke an API key |

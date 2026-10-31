@@ -1,0 +1,49 @@
+.login-main {
+  min-height: calc(100vh - 72px);
+  display: grid;
+  place-items: center;
+}
+.login-panel {
+  width: 100%;
+  max-width: 420px;
+}
+.login-panel h1 {
+  font-size: 28px;
+}
+.login-field {
+  margin-top: 20px;
+}
+.field-error {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+input[aria-invalid='true'] {
+  border-color: #f3a5a5;
+}
+.remember {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px 0 0;
+  font-size: 13px;
+  color: #c7d4e4;
+}
+.remember input {
+  width: auto;
+  accent-color: #8de0c0;
+}
+.remember-help {
+  margin-top: 6px;
+}
+.notice {
+  border: 1px solid #716138;
+  background: #28251d;
+  color: #e5c779;
+  border-radius: 5px;
+  padding: 10px 12px;
+  font-size: 13px;
+}
+.login-submit {
+  width: 100%;
+  margin-top: 22px;
+}

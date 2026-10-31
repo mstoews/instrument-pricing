@@ -4,6 +4,7 @@ import { DatePipe } from '@angular/common';
 import { InstrumentStore } from '../../state/instrument.store';
 import { OptionWorkspaceStore } from '../../state/option-workspace.store';
 import { Instrument } from '../../core/models';
+import { AuthStore } from '../../state/auth.store';
 @Component({
  selector: 'app-option-workspace', imports: [DatePipe, EuropeanPricer],
  providers: [InstrumentStore, OptionWorkspaceStore],
@@ -14,6 +15,7 @@ export class OptionWorkspace implements OnInit {
  useContract(id: string) { this.workspace.selectContract(id); this.pricer()?.focus(); }
  readonly instruments = inject(InstrumentStore);
  readonly workspace = inject(OptionWorkspaceStore);
+ readonly auth = inject(AuthStore);
  ngOnInit() { this.instruments.search('AAPL'); }
  select(instrument: Instrument) { this.instruments.select(instrument); this.workspace.select(instrument); }
  refresh() { const instrument = this.instruments.selected(); if (instrument) this.workspace.select(instrument); }
