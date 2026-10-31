@@ -35,6 +35,16 @@ smoke:
 	PRICING_API_KEY=$$(go run ./cmd/useradmin api-key -email $(SMOKE_EMAIL) -name smoke -scope ingest) \
 	SMOKE_EMAIL=$(SMOKE_EMAIL) SMOKE_PASSWORD='$(SMOKE_PASSWORD)' PYTHONPATH=ingestion/src python3 scripts/smoke.py
 
+.PHONY: ingest-massive ingest-treasury
+# Vendor ingestion; needs PRICING_API_KEY (ingest scope) and, for Massive, MASSIVE_API_KEY.
+API_URL ?= http://127.0.0.1:8080
+YEAR ?= $(shell date +%Y)
+ingest-massive:
+	@test -n "$(TICKERS)" || { echo "usage: make ingest-massive TICKERS=AAPL,MSFT [FROM=YYYY-MM-DD] [TO=YYYY-MM-DD]" >&2; exit 2; }
+	PYTHONPATH=ingestion/src python3 -m pricing_ingestion.cli --base-url $(API_URL) massive-bars --tickers $(TICKERS) $(if $(FROM),--from $(FROM)) $(if $(TO),--to $(TO))
+ingest-treasury:
+	PYTHONPATH=ingestion/src python3 -m pricing_ingestion.cli --base-url $(API_URL) treasury-curve --year $(YEAR) $(if $(LATEST),--latest)
+
 .PHONY: web web-build test-web
 web:
 	cd web && npm start

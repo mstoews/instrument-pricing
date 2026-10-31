@@ -114,5 +114,10 @@ for path, payload, expected in [
         raise AssertionError('Expected rejection')
     except HTTPError as e:
         assert e.code == expected, (e.code, expected)
-print('PASS: security master, price bars, bond analytics, performance')
+snap = dict(curve_name='Smoke zero curve', currency='USD', source_id='treasury', observed_at=datetime.now(timezone.utc).isoformat(),
+            points=[dict(tenor_days=30, zero_rate='0.04192667'), dict(tenor_days=3650, zero_rate='-0.0001')])
+first_curve = post('/v1/ingestion/curves', snap)
+assert first_curve['inserted'] and post('/v1/ingestion/curves', dict(snap, points=snap['points'][:1])) == dict(first_curve, inserted=False)
+assert [p['zero_rate'] for p in get(f"/v1/curves/{first_curve['curve_id']}/points")] == ['0.04192667', '-0.0001'], 'curve replay changed points'
+print('PASS: security master, price bars, curve ingestion, bond analytics, performance')
 print('PASS: search, resolution, option chain, curves, C++ pricing, Python ingestion, precision, replay, late arrival and error contracts')

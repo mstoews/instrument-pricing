@@ -74,6 +74,37 @@ Neon suspends idle computes; the API allows 20 seconds for the first ping (a col
 
 To install Python as a package, optionally create a virtual environment and run `pip install -e ./ingestion`; then use `pricing-ingest`. The Make targets need no Python dependencies.
 
+## Market data ingestion
+
+`pricing-ingest` (or `python -m pricing_ingestion.cli`) normalizes vendor data in Python and posts it to `/v1/ingestion/*` with an ingest-scoped `PRICING_API_KEY`. It uses the standard library only.
+
+```sh
+export PRICING_API_KEY=ipk_…            # ingest scope, from cmd/useradmin or POST /v1/auth/api-keys
+export MASSIVE_API_KEY=…                 # from massive.com
+make ingest-massive TICKERS=AAPL,MSFT FROM=2025-11-01 TO=2026-10-30
+make ingest-treasury YEAR=2026           # or LATEST=1 for the most recent date only
+```
+
+**Massive (formerly Polygon.io): daily stock bars.**
+- For each ticker the adapter fetches the ticker overview. It resolves an existing instrument by composite FIGI, then by `ticker@primary exchange`.
+- If neither matches, it creates the equity with ticker, FIGI, share-class FIGI and CIK identifiers.
+- It then loads raw daily OHLCV, plus the split-adjusted close as `adj_close` (Massive's adjusted bars are split-adjusted only, not dividend-adjusted). Bars go to the API in batches of up to 5,000.
+- The Massive key travels in an `Authorization` header, never in URLs.
+- Requests are paced to the free tier's 5 per minute. Set `MASSIVE_CALLS_PER_MINUTE` (or `--calls-per-minute`) higher on paid plans.
+- HTTP 429 and 5xx responses are retried with backoff, honouring `Retry-After`.
+- `MASSIVE_BASE_URL` defaults to `https://api.massive.com`; `https://api.polygon.io` also works.
+- Re-running is safe: replayed bars are counted as not new.
+
+**U.S. Treasury: zero curve.**
+- The adapter downloads the year's Daily Treasury Par Yield Curve CSV, or reads `--file`. It finds tenors from the column headers, so added columns such as 1.5-month need no code change, and it skips blank cells.
+- Each date's par curve is bootstrapped into continuously compounded zero rates and stored as one snapshot of the curve **"UST zero (bootstrapped from par CMT)"** (USD, source `treasury`), observed at 15:30 New York time.
+- Bootstrap method: par yields are interpolated linearly. Maturities of six months or less are treated as bills, with discount factor 1/(1 + y·t). Longer ones are semiannual par bonds on a 0.5-year grid, solved one step at a time.
+- Each snapshot has the published sub-six-month tenors plus 60 semiannual points out to 30 years, with tenor days = round(years × 365).
+- Use its `curve_id` with `GET /v1/bonds/{id}/analytics` for a Z-spread to Treasuries.
+- The result approximates the published fitted par curve: actual coupon dates and bill/coupon basis differences are ignored.
+
+`POST /v1/ingestion/curves` takes `{"curve_name","currency","source_id","observed_at","points":[{"tenor_days","zero_rate"}]}`. It creates the curve on first use and returns `{"curve_id","inserted"}`; a replayed curve, source and observation time keeps its first points. Migration 000004 registers the `massive` and `treasury` data sources in every database (Neon included). Vendor terms: the cheaper Massive plans are licensed for personal use; showing their data to other users needs a business licence.
+
 ## Run the frontend
 
 Use Node.js 24 LTS or another Angular 22 supported release and npm. With the API running (`make api`) and a user created with `cmd/useradmin` (see **Local run**), in a third terminal:
@@ -107,7 +138,7 @@ web/ → components → NgRx Signal Stores → HTTP services → Go REST
 - `internal/repository`: explicit conversion between domain and sqlc models.
 - `internal/db`: generated code; edit `db/queries`, then `make generate`.
 - `cmd/migrate`: embedded, ordered, transactional migrations with checksums and an advisory lock. Re-running is safe; applied migration edits are rejected. Down SQL is provided for disposable database recovery but is intentionally not automatically invoked.
-- `ingestion`: provider/sink protocols, normalized decimal quote model and REST client. Massive, FINRA, FRED adapters explicitly raise `NotImplementedError`. No vendor payloads or credentials cross into Go/C++; Python never accesses PostgreSQL.
+- `ingestion`: provider/sink protocols, normalized decimal quote model and REST client. Massive (daily bars, reference data) and Treasury (zero curves) adapters are implemented; FINRA and FRED adapters explicitly raise `NotImplementedError`. No vendor payloads or credentials cross into Go/C++; Python never accesses PostgreSQL.
 - `pricing`: a C++ library with no persistence, network or vendor dependency. The Go adapter in `pricing/src` implements `domain.PricingEngine`; a C ABI catches all native exceptions before returning to Go. The adapter lives alongside the canonical C++ source so Go builds it directly and tracks source changes. `cmd/api` injects it into `service.Pricer`. CMake still builds and tests the standalone C++ library.
 
 ## REST contract
@@ -139,7 +170,8 @@ web/ → components → NgRx Signal Stores → HTTP services → Go REST
 | GET | `/v1/market-data/{id}/bars?source=sample&from=2026-01-01&to=2026-09-15` | Daily bars for one source, ascending, up to 20,000 |
 | GET | `/v1/instruments/{id}/performance?source=sample&from=…&to=…` | Return/risk statistics; optional `benchmark_id`, `risk_free_rate` |
 | POST | `/v1/ingestion/bars` | Persist up to 5,000 daily bars in one transaction; `{"received","inserted"}` |
-| POST | `/v1/ingestion/trades`, `/curves` | Explicit 501 stubs |
+| POST | `/v1/ingestion/curves` | Persist a zero-curve snapshot, creating the curve on first use; `{"curve_id","inserted"}` |
+| POST | `/v1/ingestion/trades` | Explicit 501 stub |
 
 Quote request:
 
