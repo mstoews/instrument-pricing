@@ -9,9 +9,51 @@ from pricing_ingestion.client import RestSink
 from pricing_ingestion.models import Quote
 
 base = os.environ.get("API_URL", "http://127.0.0.1:8080")
-def get(path):
-    with urlopen(base + path, timeout=10) as r:
+api_key = os.environ["PRICING_API_KEY"]  # ingest scope; `make smoke` provisions one
+auth = {'Authorization': 'Bearer ' + api_key}
+
+def get(path, headers=None):
+    with urlopen(Request(base + path, headers=auth if headers is None else headers), timeout=10) as r:
         return json.load(r)
+
+def post(path, payload, headers=None, method='POST'):
+    h = {'Content-Type': 'application/json', **(auth if headers is None else headers)}
+    with urlopen(Request(base + path, data=json.dumps(payload).encode(), headers=h, method=method), timeout=10) as r:
+        return json.load(r)
+
+def status(fn):
+    try:
+        fn()
+    except HTTPError as e:
+        return e.code
+    return 200
+
+# Authentication: login, refresh rotation, reuse detection, logout, API keys, permissions.
+creds = dict(email=os.environ['SMOKE_EMAIL'], password=os.environ['SMOKE_PASSWORD'])
+assert status(lambda: get('/v1/instruments?q=AAPL', headers={})) == 401
+assert status(lambda: post('/v1/auth/login', dict(creds, password='wrong password'), headers={})) == 401
+first = post('/v1/auth/login', creds, headers={})
+assert first['token_type'] == 'Bearer' and first['user']['role'] == 'admin'
+bearer = lambda pair: {'Authorization': 'Bearer ' + pair['access_token']}
+assert get('/v1/auth/me', bearer(first))['credential'] == 'session'
+second = post('/v1/auth/refresh', {'refresh_token': first['refresh_token']}, headers={})
+assert status(lambda: get('/v1/auth/me', bearer(first))) == 401, 'rotated access token still valid'
+assert status(lambda: post('/v1/auth/refresh', {'refresh_token': first['refresh_token']}, headers={})) == 401
+assert status(lambda: get('/v1/auth/me', bearer(second))) == 401, 'refresh reuse did not revoke the family'
+session = post('/v1/auth/login', creds, headers={})
+reader = post('/v1/auth/api-keys', {'name': 'smoke reader', 'scope': 'read'}, headers=bearer(session))
+assert reader['key'].startswith('ipk_') and reader['scope'] == 'read'
+read_auth = {'Authorization': 'Bearer ' + reader['key']}
+assert status(lambda: get('/v1/instruments?q=AAPL', headers=read_auth)) == 200
+assert status(lambda: post('/v1/ingestion/quotes', {}, headers=read_auth)) == 403
+assert status(lambda: post('/v1/auth/api-keys', {'name': 'x', 'scope': 'read'})) == 403, 'API key reached admin route'
+assert any(k['id'] == reader['id'] for k in get('/v1/auth/api-keys', bearer(session)))
+req = Request(base + f"/v1/auth/api-keys/{reader['id']}", headers=bearer(session), method='DELETE')
+urlopen(req, timeout=10).close()
+assert status(lambda: get('/v1/instruments?q=AAPL', headers=read_auth)) == 401, 'revoked key accepted'
+post('/v1/auth/logout', {}, headers=bearer(session))
+assert status(lambda: get('/v1/auth/me', bearer(session))) == 401
+print('PASS: login, refresh rotation and reuse revocation, logout, API key scopes and revocation, permissions')
 
 i = get("/v1/instruments/resolve?scheme=ticker&value=AAPL&venue=XNAS")[0]
 assert i["instrument_type"] == "equity"
@@ -27,9 +69,7 @@ scenario = dict(exercise_style='european', right_type='call', strike='100',
                 risk_free_rate='0.05', dividend_yield='0')
 for right, expected in [('call', '10.450583572'), ('put', '5.573526022')]:
     payload = dict(scenario, right_type=right)
-    with urlopen(Request(base + '/v1/pricing/european', data=json.dumps(payload).encode(),
-                         headers={'Content-Type': 'application/json'}), timeout=10) as r:
-        result = json.load(r)
+    result = post('/v1/pricing/european', payload)
     assert result['model'] == 'black_scholes' and isinstance(result['price'], str)
     assert abs(Decimal(result['price']) - Decimal(expected)) < Decimal('0.00000001')
 sink = RestSink(base)
@@ -49,7 +89,7 @@ for path, payload, expected in [
     ('/v1/pricing/european', dict(scenario, risk_free_rate='-1000'), 400),
 ]:
     try:
-        urlopen(Request(base+path, data=json.dumps(payload).encode(), headers={'Content-Type':'application/json'}), timeout=10)
+        post(path, payload)
         raise AssertionError('Expected rejection')
     except HTTPError as e:
         assert e.code == expected, (e.code, expected)
@@ -64,14 +104,13 @@ assert perf['observations'] >= 250 and perf['beta'] and perf['sma_200']
 bars = get(f"/v1/market-data/{i['id']}/bars?source=sample&from=2026-09-14&to=2026-09-15")
 assert [b['date'] for b in bars] == ['2026-09-14', '2026-09-15']
 late = dict(instrument_id=i['id'], source_id='sample', date='2026-09-15', open='1', high='1', low='1', close='1')
-with urlopen(Request(base + '/v1/ingestion/bars', data=json.dumps({'bars': [late]}).encode(), headers={'Content-Type': 'application/json'}), timeout=10) as r:
-    assert json.load(r) == {'received': 1, 'inserted': 0}, 'Bar replay overwrote the first payload'
+assert post('/v1/ingestion/bars', {'bars': [late]}) == {'received': 1, 'inserted': 0}, 'Bar replay overwrote the first payload'
 for path, payload, expected in [
     ('/v1/ingestion/bars', {'bars': [dict(late, high='0.5')]}, 400),
     ('/v1/analytics/bond', {'terms': {'maturity': '2031-01-15', 'coupon_rate': '0.05', 'coupon_frequency': 2, 'day_count': '30/360'}, 'settlement': '2031-01-15', 'clean_price': '100'}, 400),
 ]:
     try:
-        urlopen(Request(base+path, data=json.dumps(payload).encode(), headers={'Content-Type':'application/json'}), timeout=10)
+        post(path, payload)
         raise AssertionError('Expected rejection')
     except HTTPError as e:
         assert e.code == expected, (e.code, expected)

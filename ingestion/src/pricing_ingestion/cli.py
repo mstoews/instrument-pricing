@@ -6,8 +6,9 @@ def main():
     parser = argparse.ArgumentParser(description="Submit a synthetic quote through REST")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--instrument-id", default="00000000-0000-0000-0000-000000000001")
+    parser.add_argument("--api-key", default=None, help="ingest-scoped API key (default: $PRICING_API_KEY)")
     args = parser.parse_args()
-    sink = RestSink(args.base_url)
+    sink = RestSink(args.base_url, args.api_key)
     for quote in SampleAdapter().quotes(args.instrument_id):
         sink.submit_quote(quote)
     print("Sample quote submitted")
