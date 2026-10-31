@@ -60,6 +60,24 @@ func (m *Market) Points(c context.Context, id string) ([]domain.CurvePoint, erro
 	}
 	return m.store.Points(c, id)
 }
+
+// IngestCurve stores a curve snapshot, creating the curve definition on first
+// use. Like quotes it is append-only: a replayed snapshot keeps its first points.
+func (m *Market) IngestCurve(c context.Context, s domain.CurveSnapshot) (domain.CurveIngestResult, error) {
+	if strings.TrimSpace(s.CurveName) == "" || len(s.CurveName) > 200 || !currency.MatchString(s.Currency) {
+		return domain.CurveIngestResult{}, invalid("curve_name (1-200 characters) and a three-letter currency are required")
+	}
+	if !validSource(s.SourceID) || s.ObservedAt.IsZero() {
+		return domain.CurveIngestResult{}, invalid("source_id and observed_at are required")
+	}
+	if len(s.Points) == 0 {
+		return domain.CurveIngestResult{}, invalid("at least one curve point is required")
+	}
+	if _, err := zeroCurve(s.Points); err != nil {
+		return domain.CurveIngestResult{}, err
+	}
+	return m.store.IngestCurve(c, s)
+}
 func (m *Market) IngestQuote(c context.Context, q domain.Quote) error {
 	if !uuid.MatchString(q.InstrumentID) || q.SourceID == "" || len(q.SourceID) > 50 || q.ObservedAt.IsZero() || !q.ReceivedAt.IsZero() || !decimal.MatchString(q.Bid) || !decimal.MatchString(q.Ask) {
 		return domain.ErrInvalid

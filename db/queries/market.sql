@@ -21,3 +21,10 @@ SELECT p.tenor_days,p.zero_rate::text AS zero_rate,s.observed_at,s.source_id FRO
 WHERE s.id=(SELECT id FROM curve_snapshot WHERE curve_id=sqlc.arg(id)::uuid ORDER BY observed_at DESC,received_at DESC,id DESC LIMIT 1) ORDER BY p.tenor_days;
 -- name: InsertQuote :exec
 INSERT INTO quote(instrument_id,source_id,observed_at,bid,ask) VALUES(sqlc.arg(instrument_id)::uuid,sqlc.arg(source_id),sqlc.arg(observed_at)::timestamptz,sqlc.arg(bid)::numeric,sqlc.arg(ask)::numeric) ON CONFLICT(instrument_id,source_id,observed_at) DO NOTHING;
+-- name: UpsertCurve :one
+INSERT INTO curve(name,currency) VALUES(sqlc.arg(name),sqlc.arg(currency)) ON CONFLICT(name,currency) DO UPDATE SET name=excluded.name RETURNING id::text AS id;
+-- name: InsertCurveSnapshot :many
+INSERT INTO curve_snapshot(curve_id,source_id,observed_at) VALUES(sqlc.arg(curve_id)::uuid,sqlc.arg(source_id),sqlc.arg(observed_at)::timestamptz)
+ON CONFLICT(curve_id,source_id,observed_at) DO NOTHING RETURNING id::text AS id;
+-- name: InsertCurvePoint :exec
+INSERT INTO curve_point(snapshot_id,tenor_days,zero_rate) VALUES(sqlc.arg(snapshot_id)::uuid,sqlc.arg(tenor_days),sqlc.arg(zero_rate)::numeric);

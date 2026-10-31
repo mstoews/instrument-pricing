@@ -26,6 +26,8 @@ func TestHTTPFailures(t *testing.T) {
 		{"POST", "/v1/ingestion/quotes", `{"vendor_payload":{}}`, 400},
 		{"POST", "/v1/ingestion/quotes", `{} {}`, 400},
 		{"POST", "/v1/ingestion/trades", `{}`, 501},
+		{"POST", "/v1/ingestion/curves", `{"curve_name":"UST","currency":"USD","source_id":"treasury","observed_at":"2026-10-30T19:30:00Z","points":[]}`, 400},
+		{"POST", "/v1/ingestion/curves", `{"curve_name":"UST","currency":"USD","source_id":"treasury","observed_at":"2026-10-30T19:30:00Z","points":[{"tenor_days":30,"zero_rate":"4.1%"}]}`, 400},
 	} {
 		r := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
 		w := httptest.NewRecorder()

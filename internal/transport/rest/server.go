@@ -119,7 +119,15 @@ func Handler(s *service.Market, pricer *service.Pricer, securities *service.Secu
 		e := s.IngestQuote(r.Context(), q)
 		reply(w, map[string]string{"status": "accepted"}, e)
 	})
-	for _, path := range []string{"trades", "curves"} {
+	rt.handle("POST /v1/ingestion/curves", domain.PermWrite, func(w http.ResponseWriter, r *http.Request) {
+		var q domain.CurveSnapshot
+		if !decode(w, r, 65536, &q) {
+			return
+		}
+		v, e := s.IngestCurve(r.Context(), q)
+		reply(w, v, e)
+	})
+	for _, path := range []string{"trades"} {
 		rt.handle("POST /v1/ingestion/"+path, domain.PermWrite, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotImplemented)

@@ -102,6 +102,52 @@ func (q *Queries) Expirations(ctx context.Context, id pgtype.UUID) ([]string, er
 	return items, nil
 }
 
+const insertCurvePoint = `-- name: InsertCurvePoint :exec
+INSERT INTO curve_point(snapshot_id,tenor_days,zero_rate) VALUES($1::uuid,$2,$3::numeric)
+`
+
+type InsertCurvePointParams struct {
+	SnapshotID pgtype.UUID    `json:"snapshot_id"`
+	TenorDays  int32          `json:"tenor_days"`
+	ZeroRate   pgtype.Numeric `json:"zero_rate"`
+}
+
+func (q *Queries) InsertCurvePoint(ctx context.Context, arg InsertCurvePointParams) error {
+	_, err := q.db.Exec(ctx, insertCurvePoint, arg.SnapshotID, arg.TenorDays, arg.ZeroRate)
+	return err
+}
+
+const insertCurveSnapshot = `-- name: InsertCurveSnapshot :many
+INSERT INTO curve_snapshot(curve_id,source_id,observed_at) VALUES($1::uuid,$2,$3::timestamptz)
+ON CONFLICT(curve_id,source_id,observed_at) DO NOTHING RETURNING id::text AS id
+`
+
+type InsertCurveSnapshotParams struct {
+	CurveID    pgtype.UUID        `json:"curve_id"`
+	SourceID   string             `json:"source_id"`
+	ObservedAt pgtype.Timestamptz `json:"observed_at"`
+}
+
+func (q *Queries) InsertCurveSnapshot(ctx context.Context, arg InsertCurveSnapshotParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, insertCurveSnapshot, arg.CurveID, arg.SourceID, arg.ObservedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const insertQuote = `-- name: InsertQuote :exec
 INSERT INTO quote(instrument_id,source_id,observed_at,bid,ask) VALUES($1::uuid,$2,$3::timestamptz,$4::numeric,$5::numeric) ON CONFLICT(instrument_id,source_id,observed_at) DO NOTHING
 `
@@ -283,4 +329,20 @@ func (q *Queries) SearchInstruments(ctx context.Context, term string) ([]SearchI
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertCurve = `-- name: UpsertCurve :one
+INSERT INTO curve(name,currency) VALUES($1,$2) ON CONFLICT(name,currency) DO UPDATE SET name=excluded.name RETURNING id::text AS id
+`
+
+type UpsertCurveParams struct {
+	Name     string `json:"name"`
+	Currency string `json:"currency"`
+}
+
+func (q *Queries) UpsertCurve(ctx context.Context, arg UpsertCurveParams) (string, error) {
+	row := q.db.QueryRow(ctx, upsertCurve, arg.Name, arg.Currency)
+	var id string
+	err := row.Scan(&id)
+	return id, err
 }
