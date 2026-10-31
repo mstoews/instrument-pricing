@@ -11,17 +11,23 @@ import (
 	"time"
 )
 
-type Postgres struct{ q *db.Queries }
+type Postgres struct {
+	q    *db.Queries
+	conn db.DBTX
+}
 
-func New(d db.DBTX) *Postgres  { return &Postgres{db.New(d)} }
+func New(d db.DBTX) *Postgres  { return &Postgres{db.New(d), d} }
 func uid(s string) pgtype.UUID { var u pgtype.UUID; _ = u.Scan(s); return u }
 func translate(e error) error {
 	if errors.Is(e, pgx.ErrNoRows) {
 		return domain.ErrNotFound
 	}
 	var p *pgconn.PgError
-	if errors.As(e, &p) && (p.Code == "23503" || p.Code == "23514" || p.Code == "22003") {
+	if errors.As(e, &p) && (p.Code == "23503" || p.Code == "23514" || p.Code == "22003" || p.Code == "22008") {
 		return domain.ErrInvalid
+	}
+	if errors.As(e, &p) && p.Code == "23505" {
+		return domain.ErrConflict
 	}
 	return e
 }
@@ -82,6 +88,33 @@ func (p *Postgres) IngestQuote(c context.Context, x domain.Quote) error {
 		return domain.ErrInvalid
 	}
 	return translate(p.q.InsertQuote(c, db.InsertQuoteParams{InstrumentID: uid(x.InstrumentID), SourceID: x.SourceID, ObservedAt: pgtype.Timestamptz{Time: x.ObservedAt, Valid: true}, Bid: bid, Ask: ask}))
+}
+
+func (p *Postgres) IngestCurve(c context.Context, s domain.CurveSnapshot) (out domain.CurveIngestResult, e error) {
+	e = p.inTx(c, func(q *db.Queries) error {
+		if out.CurveID, e = q.UpsertCurve(c, db.UpsertCurveParams{Name: s.CurveName, Currency: s.Currency}); e != nil {
+			return e
+		}
+		ids, e := q.InsertCurveSnapshot(c, db.InsertCurveSnapshotParams{CurveID: uid(out.CurveID), SourceID: s.SourceID, ObservedAt: pgtype.Timestamptz{Time: s.ObservedAt, Valid: true}})
+		if e != nil || len(ids) == 0 {
+			return e // no row: this snapshot was already stored
+		}
+		out.Inserted = true
+		for _, pt := range s.Points {
+			rate, e := num(pt.ZeroRate)
+			if e != nil {
+				return e
+			}
+			if e = q.InsertCurvePoint(c, db.InsertCurvePointParams{SnapshotID: uid(ids[0]), TenorDays: pt.TenorDays, ZeroRate: rate}); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+	if e != nil {
+		return domain.CurveIngestResult{}, e
+	}
+	return out, nil
 }
 
 var _ domain.Store = (*Postgres)(nil)

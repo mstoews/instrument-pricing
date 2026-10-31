@@ -56,4 +56,15 @@ Contract-workflow validation: 47 frontend tests and the production build passed.
 
 Current verification: 60 frontend tests and the production build pass. Tests cover curve/currency cancellation, stale snapshot prevention, errors and empty states, exact negative/zero rate copying, unsupported precision, contract currency restrictions, provenance, refresh behavior, and disposal. Visual desktop/mobile QA remains outstanding because no browser was connected during prior checks.
 
+## Authentication — implemented
+
+- `AuthService` wraps `/v1/auth/login`, `/refresh` and `/logout`. `AuthStore` is a root store (the session outlives any workspace) holding the user, the in-memory access token and its expiry, sign-in request state, and a notice for expired or remote sign-outs.
+- Routing: `/login` (guest guard) and the workspace at `/` (auth guard), both lazy-loaded. An app initializer restores a stored session through one refresh before the first navigation, so both guards decide synchronously. A rejected stored token is discarded; a network failure keeps it for the next load.
+- `authInterceptor` handles `/v1` calls except the auth endpoints. It attaches the token and refreshes it 30 seconds before expiry. On a 401 it shares one refresh across all failing requests and retries each once. A rejected refresh ends the session: the store clears tokens and redirects once to `/login?returnUrl=…` with a notice. Errors other than 401 pass through unchanged. Stores keep their existing error handling.
+- Refresh tokens are single-use on the server, so `refresh()` is single-flight within a tab and runs under a Web Locks lock across tabs. Inside the lock it re-reads storage, so a token another tab just rotated is used rather than replayed. Rotation overwrites the stored key without removing it, because a removal is the cross-tab signal for sign-out.
+- `Login` uses Signal Forms (required, email and length validators) with labelled fields, `autocomplete` hints for password managers, inline errors and a live alert for server errors. Repeat submits are ignored while pending (`exhaustMap`); editing clears a stale error. 401, 429 and network failures each get a specific message.
+- Sign-out sends the refresh token to the server, so it works even when the access token has expired or been rotated by another tab. It clears local state first, so it never depends on the network.
+
+Verification: 84 frontend tests and the production build pass. A Playwright run against the real Go API and PostgreSQL covered redirect-to-login, validation, wrong password, sign-in, authorized data loading, reload restore, silent refresh before expiry (exactly one refresh), a server-rejected refresh ending the session, remember-me storage, a second tab sharing the session, sign-out propagating across tabs and revoking the session server-side, and a 390 px mobile layout with no overflow.
+
 Next work: visual QA with a connected browser and deliberate maturity-matched curve interpolation, with explicit day-count and extrapolation rules. No automatic curve construction or live vendor integration is implemented.

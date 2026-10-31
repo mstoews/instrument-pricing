@@ -31,6 +31,39 @@ func TestQuoteValidation(t *testing.T) {
 		t.Fatal("invalid input reached persistence")
 	}
 }
+func (f *fakeStore) IngestCurve(context.Context, domain.CurveSnapshot) (domain.CurveIngestResult, error) {
+	f.calls++
+	return domain.CurveIngestResult{CurveID: "c", Inserted: true}, nil
+}
+func TestCurveValidation(t *testing.T) {
+	f := &fakeStore{}
+	s := New(f)
+	good := domain.CurveSnapshot{CurveName: "UST zero", Currency: "USD", SourceID: "treasury", ObservedAt: time.Now(),
+		Points: []domain.ZeroPoint{{TenorDays: 30, ZeroRate: "0.04123456"}, {TenorDays: 365, ZeroRate: "-0.001"}}}
+	if _, err := s.IngestCurve(context.Background(), good); err != nil {
+		t.Fatal(err)
+	}
+	for name, mutate := range map[string]func(*domain.CurveSnapshot){
+		"no name":      func(x *domain.CurveSnapshot) { x.CurveName = " " },
+		"bad currency": func(x *domain.CurveSnapshot) { x.Currency = "usd" },
+		"no source":    func(x *domain.CurveSnapshot) { x.SourceID = "" },
+		"no time":      func(x *domain.CurveSnapshot) { x.ObservedAt = time.Time{} },
+		"no points":    func(x *domain.CurveSnapshot) { x.Points = nil },
+		"dup tenor": func(x *domain.CurveSnapshot) {
+			x.Points = append(x.Points, domain.ZeroPoint{TenorDays: 30, ZeroRate: "0.04"})
+		},
+		"bad rate": func(x *domain.CurveSnapshot) { x.Points = []domain.ZeroPoint{{TenorDays: 30, ZeroRate: "4.1%"}} },
+	} {
+		x := good
+		mutate(&x)
+		if _, err := s.IngestCurve(context.Background(), x); !errors.Is(err, domain.ErrInvalid) {
+			t.Errorf("%s: got %v", name, err)
+		}
+	}
+	if f.calls != 1 {
+		t.Fatalf("invalid curves reached persistence: %d", f.calls)
+	}
+}
 func TestInvalidRequests(t *testing.T) {
 	s := New(&fakeStore{})
 	if _, e := s.Chain(context.Background(), "bad", "2027-01-15"); e == nil {

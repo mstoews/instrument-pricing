@@ -8,6 +8,7 @@ import (
 
 var ErrInvalid = errors.New("invalid request")
 var ErrNotFound = errors.New("not found")
+var ErrConflict = errors.New("conflict")
 
 type Instrument struct {
 	ID             string `json:"id"`
@@ -44,6 +45,20 @@ type CurvePoint struct {
 	ObservedAt time.Time `json:"observed_at"`
 	SourceID   string    `json:"source_id"`
 }
+
+// CurveSnapshot is one observation of a zero curve: continuously compounded
+// decimal zero rates by tenor in days from the observation.
+type CurveSnapshot struct {
+	CurveName  string      `json:"curve_name"`
+	Currency   string      `json:"currency"`
+	SourceID   string      `json:"source_id"`
+	ObservedAt time.Time   `json:"observed_at"`
+	Points     []ZeroPoint `json:"points"`
+}
+type CurveIngestResult struct {
+	CurveID  string `json:"curve_id"`
+	Inserted bool   `json:"inserted"` // false when this curve/source/time was already stored
+}
 type Store interface {
 	Search(context.Context, string) ([]Instrument, error)
 	Resolve(context.Context, string, string, string) ([]Instrument, error)
@@ -53,4 +68,5 @@ type Store interface {
 	Curves(context.Context, string) ([]Curve, error)
 	Points(context.Context, string) ([]CurvePoint, error)
 	IngestQuote(context.Context, Quote) error
+	IngestCurve(context.Context, CurveSnapshot) (CurveIngestResult, error)
 }

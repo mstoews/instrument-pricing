@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 from decimal import Decimal
 from pricing_ingestion.models import Quote
-from pricing_ingestion.adapters.massive import MassiveAdapter
+from pricing_ingestion.adapters.finra import FinraAdapter
 
 class QuoteTests(unittest.TestCase):
     def test_precision(self):
@@ -14,4 +14,4 @@ class QuoteTests(unittest.TestCase):
                 Quote("00000000-0000-0000-0000-000000000001", "sample", datetime.now(timezone.utc), Decimal(bid), Decimal(ask)).payload()
     def test_live_adapter_explicitly_unimplemented(self):
         with self.assertRaises(NotImplementedError):
-            MassiveAdapter().quotes("x")
+            FinraAdapter().quotes("x")

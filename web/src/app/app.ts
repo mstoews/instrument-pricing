@@ -1,4 +1,4 @@
 import { Component } from '@angular/core';
-import { OptionWorkspace } from './features/option-workspace/option-workspace';
-@Component({ selector: 'app-root', imports: [OptionWorkspace], template: '<app-option-workspace />' })
+import { RouterOutlet } from '@angular/router';
+@Component({ selector: 'app-root', imports: [RouterOutlet], template: '<router-outlet />' })
 export class App {}

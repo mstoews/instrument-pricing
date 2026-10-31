@@ -14,7 +14,12 @@ import (
 func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	c, e := pgx.Connect(ctx, os.Getenv("DATABASE_URL"))
+	// Prefer a direct (non-pooled) URL for DDL; on Neon this is the host without "-pooler".
+	dsn := os.Getenv("MIGRATE_DATABASE_URL")
+	if dsn == "" {
+		dsn = os.Getenv("DATABASE_URL")
+	}
+	c, e := pgx.Connect(ctx, dsn)
 	if e != nil {
 		log.Fatal(e)
 	}

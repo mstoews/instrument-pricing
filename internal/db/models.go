@@ -8,12 +8,56 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type ApiKey struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	Name       string             `json:"name"`
+	Scope      string             `json:"scope"`
+	KeyHash    []byte             `json:"key_hash"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	RevokedAt  pgtype.Timestamptz `json:"revoked_at"`
+}
+
+type AppUser struct {
+	ID           pgtype.UUID        `json:"id"`
+	Email        string             `json:"email"`
+	PasswordHash string             `json:"password_hash"`
+	Role         string             `json:"role"`
+	Disabled     bool               `json:"disabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+}
+
+type AuthSession struct {
+	ID               pgtype.UUID        `json:"id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	FamilyID         pgtype.UUID        `json:"family_id"`
+	AccessHash       []byte             `json:"access_hash"`
+	RefreshHash      []byte             `json:"refresh_hash"`
+	AccessExpiresAt  pgtype.Timestamptz `json:"access_expires_at"`
+	RefreshExpiresAt pgtype.Timestamptz `json:"refresh_expires_at"`
+	RotatedAt        pgtype.Timestamptz `json:"rotated_at"`
+	RevokedAt        pgtype.Timestamptz `json:"revoked_at"`
+	UserAgent        string             `json:"user_agent"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
 type Bond struct {
+	InstrumentID    pgtype.UUID    `json:"instrument_id"`
+	Issuer          string         `json:"issuer"`
+	Maturity        pgtype.Date    `json:"maturity"`
+	CouponRate      pgtype.Numeric `json:"coupon_rate"`
+	FaceValue       pgtype.Numeric `json:"face_value"`
+	IssueDate       pgtype.Date    `json:"issue_date"`
+	CouponFrequency int16          `json:"coupon_frequency"`
+	DayCount        string         `json:"day_count"`
+	Redemption      pgtype.Numeric `json:"redemption"`
+}
+
+type BondCall struct {
 	InstrumentID pgtype.UUID    `json:"instrument_id"`
-	Issuer       string         `json:"issuer"`
-	Maturity     pgtype.Date    `json:"maturity"`
-	CouponRate   pgtype.Numeric `json:"coupon_rate"`
-	FaceValue    pgtype.Numeric `json:"face_value"`
+	CallDate     pgtype.Date    `json:"call_date"`
+	CallPrice    pgtype.Numeric `json:"call_price"`
 }
 
 type Curve struct {
@@ -46,6 +90,7 @@ type Equity struct {
 	InstrumentID pgtype.UUID `json:"instrument_id"`
 	Exchange     string      `json:"exchange"`
 	Country      string      `json:"country"`
+	Sector       string      `json:"sector"`
 }
 
 type Instrument struct {
@@ -76,6 +121,19 @@ type OptionContract struct {
 	RightType     string         `json:"right_type"`
 	ExerciseStyle string         `json:"exercise_style"`
 	Multiplier    pgtype.Numeric `json:"multiplier"`
+}
+
+type PriceBar struct {
+	InstrumentID pgtype.UUID        `json:"instrument_id"`
+	SourceID     string             `json:"source_id"`
+	BarDate      pgtype.Date        `json:"bar_date"`
+	Open         pgtype.Numeric     `json:"open"`
+	High         pgtype.Numeric     `json:"high"`
+	Low          pgtype.Numeric     `json:"low"`
+	Close        pgtype.Numeric     `json:"close"`
+	AdjClose     pgtype.Numeric     `json:"adj_close"`
+	Volume       pgtype.Numeric     `json:"volume"`
+	ReceivedAt   pgtype.Timestamptz `json:"received_at"`
 }
 
 type Quote struct {

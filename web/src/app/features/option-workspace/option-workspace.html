@@ -1,4 +1,4 @@
-<header class="topbar"><a class="brand" href="/">P<span> / </span>Pricing platform</a><span class="version">WORKSTATION · V0.1</span><span class="badge">SYNTHETIC DATA</span></header>
+<header class="topbar"><a class="brand" href="/">P<span> / </span>Pricing platform</a><span class="version">WORKSTATION · V0.1</span><span class="badge">SYNTHETIC DATA</span>@if (auth.user(); as user) { <span class="user" [title]="user.role">{{ user.email }}</span><button type="button" class="secondary" (click)="auth.logout()">Sign out</button> }</header>
 <main>
  <div class="intro"><div><p class="eyebrow">MARKETS / EQUITY DERIVATIVES</p><h1>Option workspace</h1><p class="muted">Explore instruments, inspect quotes, and price European scenarios.</p></div><div class="session">SAMPLE SESSION<span>Quotes &amp; derivatives</span></div></div>
  <div class="layout">
